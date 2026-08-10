@@ -7,7 +7,7 @@ import { JsonlStore } from '../helper/JsonlStore';
 import { ClaudeStoreHelper } from '../helper/ClaudeStoreHelper';
 import { Paths } from '../paths';
 import { RootManager } from './RootManager';
-import { TraceEvent, TraceStats, TraceToolStat, TraceSlow, TraceTaskStat, TracePhaseBreakdown } from '../models/Types';
+import { TraceEvent, TraceStats, TraceToolStat, TraceSlow, TraceTaskStat, TracePhaseBreakdown, TraceCounts } from '../models/Types';
 
 interface RawFrame {
   type?: string;
@@ -188,6 +188,7 @@ export class TraceStore extends TraceStoreStruct {
       toolMs,
       modelMs: Math.max(0, spanMs - toolMs),
       phases,
+      counts: this._counts(events),
       toolCalls,
       byTool: [...tools.values()].sort((a, b) => b.totalMs - a.totalMs),
       slowest: slow.sort((a, b) => b.ms - a.ms).slice(0, 10),
@@ -252,35 +253,70 @@ export class TraceStore extends TraceStoreStruct {
       .filter((t): t is TraceTaskStat => t !== null);
   }
 
-  // 细分耗时：按「相邻事件的间隙」归类到 thinking/生成/等首token/工具/空闲… 各桶。
-  // 依据 = 间隙前后两个事件的种类，逻辑与 CLAUDE 分析口径一致；单位 ms。
+  // 单个间隙超过此阈值：几乎不可能是「一次连续的 AI 步骤」（思考有 ~1.5s 心跳、
+  // 生成逐 token、工具结果会回来），因此判为用户离开的空闲，不计入 AI 工作时间。
+  // 这条规则对「原生终端会话没有 task_start/task_end 标记、却跨天累积」的情况尤其关键。
+  private static readonly IDLE_GAP_MS = 120000;
+  private static readonly _BG_NAMES = new Set([
+    'task_started', 'task_notification', 'task_updated', 'task_progress', 'background_tasks_changed',
+  ]);
+
+  // 细分耗时：按「相邻事件的间隙」归类到 thinking/生成/等首token/工具/后台/空闲… 各桶。
+  // 归类依据 = 间隙前后两个事件的种类 + 间隙长度；单位 ms。所有间隙都会被计入某一桶，
+  // 因此各桶之和恒等于首末事件跨度（spanMs），activeMs = spanMs - idle。
   private static _phases(events: TraceEvent[]): TracePhaseBreakdown {
     const b: TracePhaseBreakdown = {
       ttft: 0, think: 0, genTool: 0, genText: 0, toolExec: 0, bgTask: 0, idle: 0, startup: 0, other: 0,
     };
     const isTH = (e: TraceEvent) => e.kind === 'system' && e.name === 'thinking_tokens';
-    const isBg = (e: TraceEvent) => e.kind === 'system' && (e.name === 'task_started' || e.name === 'task_notification');
+    const isInit = (e: TraceEvent) => e.kind === 'system' && e.name === 'init';
+    const isBg = (e: TraceEvent) => e.kind === 'system' && this._BG_NAMES.has(e.name || '');
     for (let i = 1; i < events.length; i++) {
       const p = events[i - 1];
       const c = events[i];
       const d = Math.max(0, c.ts - p.ts);
       if (d === 0) continue;
       let cat: keyof TracePhaseBreakdown;
-      if (p.kind === 'task_start') cat = 'startup';                       // 启动 → 首个请求
-      else if (c.kind === 'task_start') cat = 'idle';                     // 上一个任务结束 → 下一个任务开始 = 用户空闲
-      else if (isTH(p)) cat = 'think';                                    // 思考心跳之间 = 思考生成
-      else if (isTH(c)) cat = (p.kind === 'tool_result' || p.kind === 'text') ? 'ttft' : 'think';
-      else if (p.kind === 'tool_use' && c.kind === 'tool_result') cat = 'toolExec';
-      else if (p.kind === 'tool_use' && isBg(c)) cat = 'bgTask';
-      else if (isBg(p)) cat = 'bgTask';
+      // 1) 工具真实执行 / 后台任务：直接测量，多久都算工作时间（长构建也是 AI 在推进）
+      if (p.kind === 'tool_use' && c.kind === 'tool_result') cat = 'toolExec';
+      else if (isBg(p) || isBg(c)) cat = 'bgTask';
+      // 2) 会话/任务边界后的等待，或任何超长间隙 = 用户空闲（人不在）
+      else if (c.kind === 'task_start' || d > this.IDLE_GAP_MS) cat = 'idle';
+      // 3) 启动：task_start / init 帧附近
+      else if (p.kind === 'task_start' || isInit(p) || isInit(c)) cat = 'startup';
+      // 4) 思考：思考心跳之间 = 生成思考；心跳前的等待（工具结果后）= 等首 token
+      else if (isTH(p)) cat = 'think';
+      else if (isTH(c)) cat = (p.kind === 'tool_result' || p.kind === 'text' || p.kind === 'result') ? 'ttft' : 'think';
+      // 5) 生成：工具调用入参 / 可见文字 / 思考正文
       else if (c.kind === 'tool_use') cat = 'genTool';
       else if (c.kind === 'text') cat = 'genText';
       else if (c.kind === 'thinking') cat = 'think';
+      // 6) 工具结果 → 本轮收尾（无思考的一轮）= 等首 token
       else if (p.kind === 'tool_result' && (c.kind === 'result' || c.kind === 'task_end')) cat = 'ttft';
       else cat = 'other';
       b[cat] += d;
     }
     return b;
+  }
+
+  // 各类次数/数量统计：一遍扫描累计。
+  private static _counts(events: TraceEvent[]): TraceCounts {
+    const c: TraceCounts = {
+      tasks: 0, turns: 0, textBlocks: 0, textChars: 0, thinkingBlocks: 0, thinkingChars: 0,
+      toolUses: 0, toolErrors: 0, toolOutputChars: 0, stderrs: 0, retries: 0, bgTasks: 0,
+    };
+    for (const e of events) {
+      if (e.kind === 'task_start') c.tasks++;
+      else if (e.kind === 'result') c.turns++;
+      else if (e.kind === 'text') { c.textBlocks++; c.textChars += (e.text || '').length; }
+      else if (e.kind === 'thinking') { c.thinkingBlocks++; c.thinkingChars += (e.text || '').length; }
+      else if (e.kind === 'tool_use') c.toolUses++;
+      else if (e.kind === 'tool_result') { if (e.isError) c.toolErrors++; c.toolOutputChars += (e.output || '').length; }
+      else if (e.kind === 'stderr') c.stderrs++;
+      else if (e.kind === 'system' && e.name === 'api_retry') c.retries++;
+      else if (e.kind === 'system' && e.name === 'task_started') c.bgTasks++;
+    }
+    return c;
   }
 
   // 模型请求轮数：每次「工具结果/任务开始」之后模型重新吐出第一个 token 算一轮。

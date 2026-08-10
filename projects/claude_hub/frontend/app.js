@@ -3197,6 +3197,11 @@ function renderSessionStats(s) {
     body.innerHTML = '<div class="tr-empty">' + T('statsEmpty') + '</div>';
     return;
   }
+  // 后端尚未重启（老进程无 phases 字段）时优雅降级，避免整页 JS 崩
+  if (!s.phases) {
+    body.innerHTML = '<div class="tr-empty">' + T('statsNeedRestart') + '</div>';
+    return;
+  }
   // 汇总条
   const cost = s.usage && s.usage.costUsd ? `<span>${T('statsCost')} <b>$${s.usage.costUsd.toFixed(4)}</b></span>` : '';
   const summary =
@@ -3210,25 +3215,27 @@ function renderSessionStats(s) {
        ${cost}
      </div>`;
 
-  // 阶段细分：图表容器 + 明细表（秒 + 占比，按 activeMs 归一，idle 单列不占比）
+  // 阶段细分只看「AI 实际工作时间」如何分配（排除 idle——用户空闲已在汇总条单列）。
+  // 占比按 activeMs 归一，各段之和≈100%。
   const rows = STAT_PHASES
+    .filter((p) => p.key !== 'idle')
     .map((p) => ({ p, ms: s.phases[p.key] || 0 }))
     .filter((r) => r.ms > 0)
     .sort((a, b) => b.ms - a.ms);
   const legend = rows
     .map((r) => {
-      const base = r.p.key === 'idle' ? s.spanMs : s.activeMs;
-      const pct = base ? Math.round((r.ms / base) * 100) : 0;
+      const pct = s.activeMs ? Math.round((r.ms / s.activeMs) * 100) : 0;
       return `<div class="st-leg-i"><i style="background:${r.p.color}"></i>` +
         `<span class="st-leg-n">${T(r.p.tk)}</span>` +
         `<b>${fmtMs(r.ms)}</b><span class="st-leg-p">${pct}%</span></div>`;
     })
     .join('');
 
-  // 按任务表
+  // 按任务表（列同样排除 idle：任务内不含用户空闲）
+  const colPhases = STAT_PHASES.filter((p) => p.key !== 'idle');
   const taskRows = (s.byTask || [])
     .map((t, i) => {
-      const cells = STAT_PHASES.map((p) => {
+      const cells = colPhases.map((p) => {
         const ms = t.phases[p.key] || 0;
         return `<td>${ms ? fmtMs(ms) : '·'}</td>`;
       }).join('');
@@ -3236,7 +3243,7 @@ function renderSessionStats(s) {
       return `<tr><td class="st-tk">${escapeHtml(label)}</td><td><b>${fmtMs(t.totalMs)}</b></td>${cells}</tr>`;
     })
     .join('');
-  const taskHead = STAT_PHASES.map((p) => `<th>${T(p.tk)}</th>`).join('');
+  const taskHead = colPhases.map((p) => `<th>${T(p.tk)}</th>`).join('');
   const taskTable = (s.byTask && s.byTask.length)
     ? `<div class="st-h">${T('statsByTaskTitle')}</div>
        <div class="st-tblwrap"><table class="st-tbl">
@@ -3253,8 +3260,28 @@ function renderSessionStats(s) {
     .join('');
   const slowBlock = slow ? `<div class="st-h">${T('statsSlowTitle')}</div><div class="st-slow">${slow}</div>` : '';
 
+  // 次数/数量统计块
+  const c = s.counts || {};
+  const kchips = [
+    ['cTasks', c.tasks], ['cTurns', c.turns], ['cToolUses', c.toolUses], ['cToolErrors', c.toolErrors],
+    ['cBgTasks', c.bgTasks], ['cRetries', c.retries], ['cTextBlocks', c.textBlocks], ['cThinkingBlocks', c.thinkingBlocks],
+  ]
+    .filter(([, v]) => v)
+    .map(([k, v]) => `<span class="st-kc"><b>${v}</b>${T(k)}</span>`)
+    .join('');
+  const kchars = [
+    ['cTextChars', c.textChars], ['cThinkingChars', c.thinkingChars], ['cToolOutputChars', c.toolOutputChars],
+  ]
+    .filter(([, v]) => v)
+    .map(([k, v]) => `<span class="st-kc"><b>${fmtNum(v)}</b>${T(k)}</span>`)
+    .join('');
+  const countsBlock = (kchips || kchars)
+    ? `<div class="st-h">${T('statsCountsTitle')}</div><div class="st-counts">${kchips}${kchars}</div>`
+    : '';
+
   body.innerHTML =
     summary +
+    countsBlock +
     `<div class="st-h">${T('statsPhaseTitle')}</div>` +
     `<div class="st-chart" id="statsPhaseChart"></div>` +
     `<div class="st-legend">${legend}</div>` +
@@ -3313,6 +3340,13 @@ function scheduleTraceReload() {
   }, 1200);
 }
 
+function fmtNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 10000) return Math.round(n / 1000) + 'k';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
 function fmtMs(ms) {
   if (ms === undefined || ms === null) return '';
   if (ms < 1000) return ms + 'ms';

@@ -253,6 +253,22 @@ export interface TraceTaskStat {
   phases: TracePhaseBreakdown; // 该任务内的细分耗时
 }
 
+// 各类「次数/数量」计数：一眼看清这个会话里 AI 到底做了多少动作、写了多少字。
+export interface TraceCounts {
+  tasks: number;          // 任务数（task_start）
+  turns: number;          // 助手回合数（result 事件）
+  textBlocks: number;     // 可见文字段落数
+  textChars: number;      // 可见文字总字数
+  thinkingBlocks: number; // 思考段数
+  thinkingChars: number;  // 思考正文总字数（仅实时捕获的会话有，落盘 jsonl 会被抹掉）
+  toolUses: number;       // 工具调用次数
+  toolErrors: number;     // 工具报错次数（tool_result.isError）
+  toolOutputChars: number;// 工具输出总字数（喂回给模型的量）
+  stderrs: number;        // 子进程 stderr 事件数
+  retries: number;        // API 重试次数（system:api_retry）
+  bgTasks: number;        // 后台任务启动次数（system:task_started）
+}
+
 export interface TraceStats {
   sessionId: string;
   events: number;
@@ -262,6 +278,7 @@ export interface TraceStats {
   toolMs: number;    // 工具执行总耗时
   modelMs: number;   // 模型生成/等待总耗时（事件间隙里非工具执行的部分）
   phases: TracePhaseBreakdown; // 全会话细分耗时（thinking/生成/等首token/工具/空闲…）
+  counts: TraceCounts;         // 各类次数/数量统计
   toolCalls: number;
   byTool: TraceToolStat[]; // 按总耗时倒序
   slowest: TraceSlow[];    // 最慢的 10 次调用
