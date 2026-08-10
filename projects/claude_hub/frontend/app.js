@@ -24,6 +24,7 @@ const State = {
   selectedRoots: new Set(),               // 根目录管理弹窗中已勾选的根 id
   notices: [],                            // 运行提示（后端 kind='notice'）：{id,sessionId,taskId,level,message,at}
   dismissedNotices: new Set(),            // 用户手动关掉（或发新消息时清掉）的提示卡片 key，渲染时跳过
+  noticeOpen: false,                      // 右下角错误小圆圈是否已展开
 };
 let NOTICE_SEQ = 0;                       // 提示卡片自增 id：数组下标会随裁剪变动，不能当 key
 
@@ -1628,6 +1629,7 @@ async function selectSession(id) {
   }
   renderQuick(); // 快捷前缀按会话持久化，切换会话即刷新选中态
   State.aiExpandedGroups.clear();
+  State.noticeOpen = false; // 换会话 → 右下角错误浮层先收起，别把上一个会话的展开态带过来
   if (id) closeDrawer(); // 移动端：选中会话后收起抽屉
   if (!id) {
     State.session = null;
@@ -2069,19 +2071,61 @@ function noticeItems() {
   return items.filter((it) => !State.dismissedNotices.has(it.key)).sort((a, b) => a.at - b.at);
 }
 
+// 渲染成会话右下角的悬浮小圆圈：平时只占一个圆点（带条数），点开才展开详情浮层。
+// 之前是把大卡片直接插进正文，一出错就把对话挤没了。
 function renderNotices() {
-  const box = $('messages');
-  if (!box) return;
-  box.querySelectorAll('.msg-notice').forEach((el) => el.remove());
+  const dock = $('noticeDock');
+  const fab = $('noticeFab');
+  const pop = $('noticePop');
+  if (!dock || !fab || !pop) return;
+  const items = noticeItems();
+  if (!items.length) {
+    State.noticeOpen = false;
+    dock.hidden = true;
+    pop.hidden = true;
+    pop.textContent = '';
+    fab.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  const hasError = items.some((it) => it.level === 'error');
+  dock.hidden = false;
+  dock.classList.toggle('warn', !hasError);
+  const count = $('noticeCount');
+  if (count) {
+    count.textContent = items.length > 99 ? '99+' : String(items.length);
+    count.hidden = items.length < 2; // 只有一条时不必标数字
+  }
+  fab.title = `${State.noticeOpen ? T('noticeFabClose') : T('noticeFabOpen')}（${items.length}）`;
+  fab.setAttribute('aria-label', fab.title);
+  fab.setAttribute('aria-expanded', State.noticeOpen ? 'true' : 'false');
+
+  pop.hidden = !State.noticeOpen;
+  pop.textContent = '';
+  if (!State.noticeOpen) return;
+  const head = document.createElement('div');
+  head.className = 'np-head';
+  const title = document.createElement('span');
+  title.className = 'np-title';
+  title.textContent = `${hasError ? '✕' : '⚠'} ${T('noticePopTitle')}（${items.length}）`;
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'np-clear sm';
+  clear.textContent = T('noticeClearAll');
+  clear.addEventListener('click', () => clearNotices());
+  head.appendChild(title);
+  head.appendChild(clear);
+  pop.appendChild(head);
+  items.forEach((item) => pop.appendChild(noticeEl(item)));
+}
+
+// 圆圈的开合。展开时把最新一条滚进视野（浮层是倒不过来的正序列表，最新在底部）
+function toggleNoticePop(open) {
   const items = noticeItems();
   if (!items.length) return;
-  const typing = $('typingMsg'); // 执行中动画始终留在最底部，提示卡插到它前面
-  items.forEach((item) => {
-    const el = noticeEl(item);
-    if (typing && typing.parentNode === box) box.insertBefore(el, typing);
-    else box.appendChild(el);
-  });
-  box.scrollTop = box.scrollHeight;
+  State.noticeOpen = typeof open === 'boolean' ? open : !State.noticeOpen;
+  renderNotices();
+  const pop = $('noticePop');
+  if (State.noticeOpen && pop) pop.scrollTop = pop.scrollHeight;
 }
 
 function noticeEl(item) {
@@ -2127,7 +2171,16 @@ function pushNotice(e) {
     at: Date.now(),
   });
   if (State.notices.length > 60) State.notices.splice(0, State.notices.length - 60);
-  if (e.sessionId === State.sessionId) renderNotices();
+  if (e.sessionId === State.sessionId) { renderNotices(); pulseNoticeFab(); }
+}
+
+// 新提示到达：小圆圈脉冲两下（不自动展开——那就等于又把正文挡住了）
+function pulseNoticeFab() {
+  const fab = $('noticeFab');
+  if (!fab || $('noticeDock')?.hidden) return;
+  fab.classList.remove('pulse');
+  void fab.offsetWidth; // 强制回流，让动画能重播
+  fab.classList.add('pulse');
 }
 
 // 用户手动关掉一张提示卡：任务失败的原因来自 task.error（后端持久化，删不掉），
@@ -2145,6 +2198,7 @@ function clearNotices() {
   State.notices = State.notices.filter((n) => n.sessionId !== State.sessionId);
   const bar = $('globalError');
   if (bar) bar.hidden = true;
+  State.noticeOpen = false;
   renderNotices();
 }
 
@@ -3491,7 +3545,8 @@ function connectWs() {
       }
     } else if (e.kind === 'task') {
       upsertTask(e.task);
-      renderNotices();               // 任务失败→在正文区显示失败原因（命令/目录/stderr）
+      renderNotices();               // 任务失败→右下角小圆圈亮起，点开才看现场（命令/目录/stderr）
+      if (e.task.status === 'error') pulseNoticeFab();
       syncTypingIndicator();         // running→显示动画，结束→移除
       renderElapsedNotes();          // 任务结束→显示「耗时：X」
       refreshEngineControl();        // 有任务入队即已开始 → 引擎锁定
@@ -4452,6 +4507,16 @@ function bind() {
   });
   $('procBtn').addEventListener('click', () => document.body.classList.toggle('show-process'));
   $('closeProcessBtn').addEventListener('click', () => document.body.classList.remove('show-process'));
+  // 右下角错误小圆圈：点开/收起；点浮层外面或按 Esc 收起（点圆圈本身交给它自己 toggle）
+  $('noticeFab').addEventListener('click', (e) => { e.stopPropagation(); toggleNoticePop(); });
+  document.addEventListener('click', (e) => {
+    if (!State.noticeOpen) return;
+    if ($('noticeDock')?.contains(e.target)) return;
+    toggleNoticePop(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && State.noticeOpen) toggleNoticePop(false);
+  });
   // 快捷前缀标签：初始渲染 + Ctrl+1..9 热键（按标签整体顺序；重复按同一个=取消）
   quickLoad();
   renderQuick();

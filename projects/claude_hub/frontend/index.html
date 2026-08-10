@@ -7,7 +7,7 @@
   <title>Rubato — 让 Claude Code / Codex 更易用</title>
   <link rel="stylesheet" href="vendor/cm/codemirror.min.css" />
   <link rel="stylesheet" href="vendor/cm/theme/material-darker.min.css" />
-  <link rel="stylesheet" href="styles.css?v=20260810b" />
+  <link rel="stylesheet" href="styles.css?v=20260810d" />
 </head>
 <body class="dark">
   <!-- 登录遮罩 -->
@@ -665,7 +665,18 @@
       </div>
 
       <div class="content">
-        <div class="messages" id="messages"></div>
+        <!-- 消息列（含右下角错误悬浮圆圈；包一层是为了让圆圈相对「会话区」定位而不跟着消息滚动） -->
+        <div class="msg-wrap">
+          <div class="messages" id="messages"></div>
+          <!-- 出错时只在右下角亮一个小圆圈，点开才展开详情，不再整块占用正文 -->
+          <div class="notice-dock" id="noticeDock" hidden>
+            <div class="notice-pop" id="noticePop" hidden></div>
+            <button type="button" class="notice-fab" id="noticeFab" aria-expanded="false">
+              <span class="nf-icon">!</span>
+              <span class="nf-count" id="noticeCount"></span>
+            </button>
+          </div>
+        </div>
         <section class="process-panel">
           <header>
             <span id="processLabel"></span>
@@ -819,7 +830,7 @@
   <script src="vendor/cm/mode/sass/sass.min.js"></script>
   <script src="vendor/cm/mode/dart/dart.min.js"></script>
   <script src="vendor/cm/mode/swift/swift.min.js"></script>
-  <script src="trans.js?v=20260810b"></script>
+  <script src="trans.js?v=20260810d"></script>
   <script src="workspace.js?v=20260801i"></script>
   <script src="rootwizard.js?v=20260804a"></script>
   <script src="health.js?v=20260810b"></script>
@@ -835,6 +846,6 @@
   <script src="cat.js?v=20260801q"></script>
   <script src="rabbit.js?v=20260801z"></script>
   <script src="mecha.js?v=20260802a"></script>
-  <script src="app.js?v=20260810c"></script>
+  <script src="app.js?v=20260810d"></script>
 </body>
 </html>
