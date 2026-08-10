@@ -6,7 +6,7 @@
 
 **不用装 Node，不用装 Claude Code，不用开终端。全都打包好了。**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/平台-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
 [![Setup](https://img.shields.io/badge/配置-零配置-brightgreen.svg)]()
 
@@ -103,6 +103,6 @@ projects/claude_hub/
 
 <div align="center">
 
-**[MIT](LICENSE)** · 欢迎 issue 与 PR
+**[Apache 2.0](LICENSE)** · 欢迎 issue 与 PR
 
 </div>

@@ -6,7 +6,7 @@
 
 **No Node. No npm. No terminal. Nothing to install first.**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
 [![Setup](https://img.shields.io/badge/setup-zero%20config-brightgreen.svg)]()
 
@@ -106,6 +106,6 @@ See [`docs/SYSTEM_zh.md`](docs/SYSTEM_zh.md) and the [architecture diagram](docs
 
 <div align="center">
 
-**[MIT](LICENSE)** · Contributions and issues welcome
+**[Apache 2.0](LICENSE)** · Contributions and issues welcome
 
 </div>
