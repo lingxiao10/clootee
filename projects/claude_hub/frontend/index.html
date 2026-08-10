@@ -7,7 +7,7 @@
   <title>Rubato — 让 Claude Code / Codex 更易用</title>
   <link rel="stylesheet" href="vendor/cm/codemirror.min.css" />
   <link rel="stylesheet" href="vendor/cm/theme/material-darker.min.css" />
-  <link rel="stylesheet" href="styles.css?v=20260810d" />
+  <link rel="stylesheet" href="styles.css?v=20260810f" />
 </head>
 <body class="dark">
   <!-- 登录遮罩 -->
@@ -645,6 +645,8 @@
       <button id="ctxRenameTitle" class="ctx-item"></button>
       <button id="ctxToggleFavorite" class="ctx-item"></button>
       <button id="ctxTogglePinned" class="ctx-item"></button>
+      <div class="ctx-sep"></div>
+      <button id="ctxTraceStats" class="ctx-item"></button>
     </div>
 
     <!-- 主区 -->
@@ -776,6 +778,18 @@
     </div>
   </div>
 
+  <!-- 会话统计详情（右键会话 → 统计详情）：时间花在哪的细分分析 -->
+  <div class="st-overlay" id="statsOverlay" hidden>
+    <div class="st-drawer">
+      <div class="files-head">
+        <span class="files-title" id="statsTitle">📊 统计详情</span>
+        <button class="fm-icon" id="statsRefreshBtn" title="refresh">⟳</button>
+        <button class="files-x" id="statsClose">✕</button>
+      </div>
+      <div class="st-body" id="statsBody"></div>
+    </div>
+  </div>
+
   <!-- 文本编辑器（覆盖层，移动端友好） -->
   <div class="ed-overlay" id="edOverlay" hidden>
     <div class="ed-drawer">
@@ -831,7 +845,11 @@
   <script src="vendor/cm/mode/sass/sass.min.js"></script>
   <script src="vendor/cm/mode/dart/dart.min.js"></script>
   <script src="vendor/cm/mode/swift/swift.min.js"></script>
+<<<<<<< HEAD
   <script src="trans.js?v=20260810d"></script>
+=======
+  <script src="trans.js?v=20260810c"></script>
+>>>>>>> cd94b40 (feat(hub): 右键会话「统计详情」——细分 AI 时间花在哪)
   <script src="workspace.js?v=20260801i"></script>
   <script src="rootwizard.js?v=20260804a"></script>
   <script src="health.js?v=20260810b"></script>
@@ -847,6 +865,10 @@
   <script src="cat.js?v=20260801q"></script>
   <script src="rabbit.js?v=20260801z"></script>
   <script src="mecha.js?v=20260802a"></script>
+<<<<<<< HEAD
   <script src="app.js?v=20260810d"></script>
+=======
+  <script src="app.js?v=20260810c"></script>
+>>>>>>> cd94b40 (feat(hub): 右键会话「统计详情」——细分 AI 时间花在哪)
 </body>
 </html>

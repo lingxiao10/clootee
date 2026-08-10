@@ -2438,6 +2438,40 @@ body.light .session-item .meta .favorite-dir-badge { background: #dbeafe; color:
 .tr-ev.k-stderr .tr-k, .tr-ev.k-task_end .tr-k { color: var(--red, #e57373); }
 .tr-empty { color: var(--muted); text-align: center; padding: 40px; }
 
+/* ── 会话统计详情（右键 → 统计详情）：时间花在哪 ── */
+.st-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 97; display: flex; justify-content: flex-end; }
+.st-overlay[hidden] { display: none; }
+.st-drawer {
+  width: 72vw; max-width: 920px; height: 100%; background: var(--bg);
+  border-left: 1px solid var(--border); display: flex; flex-direction: column;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, .3);
+}
+@media (max-width: 860px) { .st-drawer { width: 100vw; max-width: 100vw; } }
+.st-body { flex: 1; overflow: auto; padding: 14px 16px; font-size: 13px; color: var(--text); }
+.st-sum { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 12px; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
+.st-sum b { color: var(--accent); font-weight: 600; }
+.st-h { font-weight: 600; margin: 18px 0 8px; font-size: 13px; }
+.st-chart { width: 100%; height: 300px; }
+.st-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; font-size: 12px; }
+.st-leg-i { display: flex; align-items: center; gap: 6px; }
+.st-leg-i i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.st-leg-n { color: var(--muted); }
+.st-leg-i b { color: var(--text); font-weight: 600; }
+.st-leg-p { color: var(--muted); font-variant-numeric: tabular-nums; }
+.st-tblwrap { overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.st-tbl { border-collapse: collapse; width: 100%; font-size: 12px; }
+.st-tbl th, .st-tbl td { padding: 6px 9px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.st-tbl th { color: var(--muted); font-weight: 500; background: var(--panel2); position: sticky; top: 0; }
+.st-tbl td.st-tk, .st-tbl th:first-child { text-align: left; }
+.st-tbl td b { color: var(--accent); }
+.st-tbl tbody tr:last-child td, .st-tbl tr:last-child td { border-bottom: none; }
+.st-slow { display: flex; flex-direction: column; gap: 5px; }
+.st-slow-i { display: flex; align-items: baseline; gap: 10px; font-size: 12px; }
+.st-slow-i b { flex: none; color: var(--accent); font-variant-numeric: tabular-nums; min-width: 56px; }
+.st-slow-n { flex: none; font-weight: 600; }
+.st-slow-b { flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-note { margin-top: 18px; padding-top: 10px; border-top: 1px dashed var(--border); color: var(--muted); font-size: 11px; line-height: 1.6; }
+
 /* ── 消息内联「🔍 过程」：单轮全过程展开 ── */
 .msg-head .trace-btn {
   flex: none; border: none; background: none; cursor: pointer;

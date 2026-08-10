@@ -7,7 +7,7 @@ import { JsonlStore } from '../helper/JsonlStore';
 import { ClaudeStoreHelper } from '../helper/ClaudeStoreHelper';
 import { Paths } from '../paths';
 import { RootManager } from './RootManager';
-import { TraceEvent, TraceStats, TraceToolStat, TraceSlow, TraceTaskStat } from '../models/Types';
+import { TraceEvent, TraceStats, TraceToolStat, TraceSlow, TraceTaskStat, TracePhaseBreakdown } from '../models/Types';
 
 interface RawFrame {
   type?: string;
@@ -177,12 +177,17 @@ export class TraceStore extends TraceStoreStruct {
       usage.cacheCreationTokens += Number(u.cache_creation_input_tokens || 0);
     }
 
+    const phases = this._phases(events);
+
     return {
       sessionId,
       events: events.length,
       spanMs,
+      activeMs: Math.max(0, spanMs - phases.idle),
+      rounds: this._rounds(events),
       toolMs,
       modelMs: Math.max(0, spanMs - toolMs),
+      phases,
       toolCalls,
       byTool: [...tools.values()].sort((a, b) => b.totalMs - a.totalMs),
       slowest: slow.sort((a, b) => b.ms - a.ms).slice(0, 10),
@@ -203,38 +208,92 @@ export class TraceStore extends TraceStoreStruct {
 
   // ── 内部纯实现 ──
 
-  // 按任务汇总（jsonl 反推的事件统一归到 native 任务下）
+  // 按任务汇总：以 task_start 事件的时间为边界把事件切成若干时间窗，逐窗统计。
+  // 之所以按「时间窗」而非 e.taskId：live 事件带真实 task 号、jsonl 反推事件统一是 native，
+  // 两路混排时按 taskId 分组会把同一时间段的事件拆到不同桶、产生跨越整段的假任务。
+  // 时间切分对两种来源都成立；任务之间的用户空闲天然落在窗与窗的边界外，不计入任一任务。
   private static _byTask(events: TraceEvent[]): TraceTaskStat[] {
-    const map = new Map<string, TraceTaskStat & { _toolIds: Set<string> }>();
-    const nameSeen = new Map<string, string>();
-    for (const e of events) {
-      const id = e.taskId || 'native';
-      const cur =
-        map.get(id) ||
-        ({ taskId: id, startedAt: e.ts, endedAt: e.ts, totalMs: 0, toolMs: 0, modelMs: 0, toolCalls: 0, _toolIds: new Set<string>() } as any);
-      cur.startedAt = Math.min(cur.startedAt, e.ts);
-      cur.endedAt = Math.max(cur.endedAt, e.ts);
-      if (e.kind === 'tool_use' && e.toolId) nameSeen.set(e.toolId, id);
-      if (e.kind === 'tool_result' && e.durationMs !== undefined) {
-        cur.toolMs += e.durationMs;
-        cur.toolCalls++;
-      }
-      map.set(id, cur);
-    }
-    return [...map.values()]
-      .map((t) => {
-        const totalMs = Math.max(0, t.endedAt - t.startedAt);
+    if (events.length === 0) return [];
+    const starts = events.filter((e) => e.kind === 'task_start');
+    // 无 task_start（纯终端 jsonl 反推）→ 整段视为一个 native 任务
+    const bounds =
+      starts.length === 0
+        ? [{ ts: events[0].ts, taskId: 'native' }]
+        : starts.map((e) => ({ ts: e.ts, taskId: e.taskId || 'native' }));
+
+    return bounds
+      .map((b, i) => {
+        const from = i === 0 ? -Infinity : b.ts;
+        const to = i + 1 < bounds.length ? bounds[i + 1].ts : Infinity;
+        const evs = events.filter((e) => e.ts >= from && e.ts < to);
+        if (evs.length === 0) return null;
+        const startedAt = evs[0].ts;
+        const endedAt = evs[evs.length - 1].ts;
+        const totalMs = Math.max(0, endedAt - startedAt);
+        let toolMs = 0;
+        let toolCalls = 0;
+        for (const e of evs) {
+          if (e.kind === 'tool_result' && e.durationMs !== undefined) {
+            toolMs += e.durationMs;
+            toolCalls++;
+          }
+        }
         return {
-          taskId: t.taskId,
-          startedAt: t.startedAt,
-          endedAt: t.endedAt,
+          taskId: b.taskId,
+          startedAt,
+          endedAt,
           totalMs,
-          toolMs: t.toolMs,
-          modelMs: Math.max(0, totalMs - t.toolMs),
-          toolCalls: t.toolCalls,
-        };
+          toolMs,
+          modelMs: Math.max(0, totalMs - toolMs),
+          toolCalls,
+          phases: this._phases(evs),
+        } as TraceTaskStat;
       })
-      .sort((a, b) => a.startedAt - b.startedAt);
+      .filter((t): t is TraceTaskStat => t !== null);
+  }
+
+  // 细分耗时：按「相邻事件的间隙」归类到 thinking/生成/等首token/工具/空闲… 各桶。
+  // 依据 = 间隙前后两个事件的种类，逻辑与 CLAUDE 分析口径一致；单位 ms。
+  private static _phases(events: TraceEvent[]): TracePhaseBreakdown {
+    const b: TracePhaseBreakdown = {
+      ttft: 0, think: 0, genTool: 0, genText: 0, toolExec: 0, bgTask: 0, idle: 0, startup: 0, other: 0,
+    };
+    const isTH = (e: TraceEvent) => e.kind === 'system' && e.name === 'thinking_tokens';
+    const isBg = (e: TraceEvent) => e.kind === 'system' && (e.name === 'task_started' || e.name === 'task_notification');
+    for (let i = 1; i < events.length; i++) {
+      const p = events[i - 1];
+      const c = events[i];
+      const d = Math.max(0, c.ts - p.ts);
+      if (d === 0) continue;
+      let cat: keyof TracePhaseBreakdown;
+      if (p.kind === 'task_start') cat = 'startup';                       // 启动 → 首个请求
+      else if (c.kind === 'task_start') cat = 'idle';                     // 上一个任务结束 → 下一个任务开始 = 用户空闲
+      else if (isTH(p)) cat = 'think';                                    // 思考心跳之间 = 思考生成
+      else if (isTH(c)) cat = (p.kind === 'tool_result' || p.kind === 'text') ? 'ttft' : 'think';
+      else if (p.kind === 'tool_use' && c.kind === 'tool_result') cat = 'toolExec';
+      else if (p.kind === 'tool_use' && isBg(c)) cat = 'bgTask';
+      else if (isBg(p)) cat = 'bgTask';
+      else if (c.kind === 'tool_use') cat = 'genTool';
+      else if (c.kind === 'text') cat = 'genText';
+      else if (c.kind === 'thinking') cat = 'think';
+      else if (p.kind === 'tool_result' && (c.kind === 'result' || c.kind === 'task_end')) cat = 'ttft';
+      else cat = 'other';
+      b[cat] += d;
+    }
+    return b;
+  }
+
+  // 模型请求轮数：每次「工具结果/任务开始」之后模型重新吐出第一个 token 算一轮。
+  private static _rounds(events: TraceEvent[]): number {
+    const starts = new Set(['thinking', 'text', 'tool_use']);
+    let n = 0;
+    for (let i = 1; i < events.length; i++) {
+      const p = events[i - 1];
+      const c = events[i];
+      const cStart = starts.has(c.kind) || (c.kind === 'system' && c.name === 'thinking_tokens');
+      if ((p.kind === 'tool_result' || p.kind === 'task_start') && cStart) n++;
+    }
+    return n;
   }
 
   private static _jsonlEvent(seq: number, ts: number, part: Partial<TraceEvent>): TraceEvent {

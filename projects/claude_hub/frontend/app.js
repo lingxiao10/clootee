@@ -164,6 +164,7 @@ function applyText() {
   $('ctxMarkTesting').textContent = T('markTesting');
   $('ctxMarkCompleted').textContent = T('markCompleted');
   $('ctxRenameTitle').textContent = T('renameSession');
+  $('ctxTraceStats').textContent = T('ctxTraceStats');
   $('ctxToggleFavorite').textContent = T('favoriteSession');
   $('processLabel').textContent = T('process');
   $('clearProcessBtn').textContent = T('clearProcess');
@@ -1474,7 +1475,7 @@ function openSessionCtxMenu(session, x, y) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const mw = 180;
-  const mh = 190;
+  const mh = 240;
   menu.style.left = Math.min(x, vw - mw - 8) + 'px';
   menu.style.top = Math.min(y, vh - mh - 8) + 'px';
 }
@@ -1519,6 +1520,12 @@ async function ctxSetStatus(status) {
   closeSessionCtxMenu();
   await api('/api/session/status', { id: s.id, status });
   await loadSessions();
+}
+function ctxOpenStats() {
+  if (!ctxSession) return;
+  const s = ctxSession;
+  closeSessionCtxMenu();
+  openSessionStats(s.id, sessionTitle(s));
 }
 async function ctxTogglePinned() {
   if (!ctxSession) return;
@@ -3133,6 +3140,159 @@ function closeTrace() {
   $('trOverlay').hidden = true;
 }
 
+// ── 会话统计详情（右键 → 统计详情）：对任意会话做「时间花在哪」的细分分析 ──
+// 数据源 GET /api/session/trace-stats（后端 TraceStore 已算好 phases/activeMs/rounds）。
+// 与 trOverlay 不同：这里按传入的 sessionId 取数，不依赖当前打开的会话。
+const Stats = { sid: '', title: '', charts: [] };
+// 阶段元数据：key 对应后端 TracePhaseBreakdown 字段，label 走 i18n，color 固定配色
+const STAT_PHASES = [
+  { key: 'ttft', tk: 'phTtft', color: '#f59e0b' },
+  { key: 'think', tk: 'phThink', color: '#8b5cf6' },
+  { key: 'genTool', tk: 'phGenTool', color: '#2563eb' },
+  { key: 'genText', tk: 'phGenText', color: '#06b6d4' },
+  { key: 'toolExec', tk: 'phToolExec', color: '#16a34a' },
+  { key: 'bgTask', tk: 'phBgTask', color: '#ec4899' },
+  { key: 'startup', tk: 'phStartup', color: '#84cc16' },
+  { key: 'idle', tk: 'phIdle', color: '#64748b' },
+  { key: 'other', tk: 'phOther', color: '#94a3b8' },
+];
+
+async function openSessionStats(sessionId, title) {
+  if (!sessionId) return;
+  Stats.sid = sessionId;
+  Stats.title = title || '';
+  $('statsTitle').textContent = '📊 ' + T('statsTitle') + (title ? ' · ' + title : '');
+  $('statsOverlay').hidden = false;
+  await loadSessionStats();
+}
+
+function closeSessionStats() {
+  _disposeStatsCharts();
+  $('statsOverlay').hidden = true;
+  Stats.sid = '';
+}
+
+function _disposeStatsCharts() {
+  Stats.charts.forEach((c) => { try { c.dispose(); } catch { /* ignore */ } });
+  Stats.charts = [];
+}
+
+async function loadSessionStats() {
+  const body = $('statsBody');
+  body.innerHTML = '<div class="tr-empty">' + T('statsLoading') + '</div>';
+  let s;
+  try {
+    s = await api('/api/session/trace-stats?id=' + encodeURIComponent(Stats.sid));
+  } catch (e) {
+    body.innerHTML = '<div class="tr-empty">' + T('statsFailed') + escapeHtml(String(e.message || e)) + '</div>';
+    return;
+  }
+  renderSessionStats(s);
+}
+
+function renderSessionStats(s) {
+  _disposeStatsCharts();
+  const body = $('statsBody');
+  if (!s || !s.events) {
+    body.innerHTML = '<div class="tr-empty">' + T('statsEmpty') + '</div>';
+    return;
+  }
+  // 汇总条
+  const cost = s.usage && s.usage.costUsd ? `<span>${T('statsCost')} <b>$${s.usage.costUsd.toFixed(4)}</b></span>` : '';
+  const summary =
+    `<div class="st-sum">
+       <span>${T('statsSpan')} <b>${fmtMs(s.spanMs)}</b></span>
+       <span>${T('statsActive')} <b>${fmtMs(s.activeMs)}</b></span>
+       <span>${T('statsIdle')} <b>${fmtMs(s.phases.idle)}</b></span>
+       <span>${T('statsRounds')} <b>${s.rounds}</b></span>
+       <span>${T('statsEvents')} <b>${s.events}</b></span>
+       <span>token in/out <b>${s.usage.inputTokens}/${s.usage.outputTokens}</b></span>
+       ${cost}
+     </div>`;
+
+  // 阶段细分：图表容器 + 明细表（秒 + 占比，按 activeMs 归一，idle 单列不占比）
+  const rows = STAT_PHASES
+    .map((p) => ({ p, ms: s.phases[p.key] || 0 }))
+    .filter((r) => r.ms > 0)
+    .sort((a, b) => b.ms - a.ms);
+  const legend = rows
+    .map((r) => {
+      const base = r.p.key === 'idle' ? s.spanMs : s.activeMs;
+      const pct = base ? Math.round((r.ms / base) * 100) : 0;
+      return `<div class="st-leg-i"><i style="background:${r.p.color}"></i>` +
+        `<span class="st-leg-n">${T(r.p.tk)}</span>` +
+        `<b>${fmtMs(r.ms)}</b><span class="st-leg-p">${pct}%</span></div>`;
+    })
+    .join('');
+
+  // 按任务表
+  const taskRows = (s.byTask || [])
+    .map((t, i) => {
+      const cells = STAT_PHASES.map((p) => {
+        const ms = t.phases[p.key] || 0;
+        return `<td>${ms ? fmtMs(ms) : '·'}</td>`;
+      }).join('');
+      const label = t.taskId === 'native' ? '终端/native' : (T('statsTaskCol') + ' ' + (i + 1));
+      return `<tr><td class="st-tk">${escapeHtml(label)}</td><td><b>${fmtMs(t.totalMs)}</b></td>${cells}</tr>`;
+    })
+    .join('');
+  const taskHead = STAT_PHASES.map((p) => `<th>${T(p.tk)}</th>`).join('');
+  const taskTable = (s.byTask && s.byTask.length)
+    ? `<div class="st-h">${T('statsByTaskTitle')}</div>
+       <div class="st-tblwrap"><table class="st-tbl">
+         <thead><tr><th>${T('statsTaskCol')}</th><th>${T('statsSpan')}</th>${taskHead}</tr></thead>
+         <tbody>${taskRows}</tbody>
+       </table></div>`
+    : '';
+
+  // 最慢工具调用
+  const slow = (s.slowest || [])
+    .filter((x) => x.ms > 0)
+    .map((x) => `<div class="st-slow-i"><b>${fmtMs(x.ms)}</b><span class="st-slow-n">${escapeHtml(x.name)}</span>` +
+      `<span class="st-slow-b">${escapeHtml(String(x.brief || '').replace(/\s+/g, ' ').slice(0, 120))}</span></div>`)
+    .join('');
+  const slowBlock = slow ? `<div class="st-h">${T('statsSlowTitle')}</div><div class="st-slow">${slow}</div>` : '';
+
+  body.innerHTML =
+    summary +
+    `<div class="st-h">${T('statsPhaseTitle')}</div>` +
+    `<div class="st-chart" id="statsPhaseChart"></div>` +
+    `<div class="st-legend">${legend}</div>` +
+    taskTable +
+    slowBlock +
+    `<div class="st-note">${T('statsNote')}</div>`;
+
+  // ECharts 需要容器有尺寸：入文档后再画
+  setTimeout(() => _renderPhaseChart(rows), 0);
+}
+
+// 横向条形图：每个阶段一根条（秒）。跟随明暗主题取色。
+function _renderPhaseChart(rows) {
+  const el = $('statsPhaseChart');
+  if (!el || !el.isConnected || typeof echarts === 'undefined' || !rows.length) return;
+  const cs = getComputedStyle(document.body);
+  const cText = (cs.getPropertyValue('--text') || '#cbd5e1').trim();
+  const cBorder = (cs.getPropertyValue('--border') || '#475569').trim();
+  const ordered = [...rows].reverse(); // ECharts y 轴从下往上，反转后最大在顶
+  const ch = echarts.init(el);
+  ch.setOption({
+    backgroundColor: 'transparent',
+    grid: { left: 8, right: 48, top: 8, bottom: 8, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+      valueFormatter: (v) => (v / 1000).toFixed(1) + 's' },
+    xAxis: { type: 'value', axisLabel: { color: cText, formatter: (v) => (v / 1000).toFixed(0) + 's' },
+      splitLine: { lineStyle: { color: cBorder, opacity: 0.4 } } },
+    yAxis: { type: 'category', data: ordered.map((r) => T(r.p.tk)),
+      axisLabel: { color: cText }, axisLine: { lineStyle: { color: cBorder } } },
+    series: [{
+      type: 'bar', data: ordered.map((r) => ({ value: r.ms, itemStyle: { color: r.p.color } })),
+      barMaxWidth: 22, label: { show: true, position: 'right', color: cText,
+        formatter: (o) => (o.value / 1000).toFixed(1) + 's' },
+    }],
+  });
+  Stats.charts.push(ch);
+}
+
 async function loadTrace() {
   try {
     await ensureTrace(true);
@@ -4439,6 +4599,9 @@ function bind() {
   $('ctxRenameTitle').addEventListener('click', ctxRenameTitle);
   $('ctxToggleFavorite').addEventListener('click', ctxToggleFavorite);
   $('ctxTogglePinned').addEventListener('click', ctxTogglePinned);
+  $('ctxTraceStats').addEventListener('click', ctxOpenStats);
+  $('statsClose').addEventListener('click', closeSessionStats);
+  $('statsRefreshBtn').addEventListener('click', loadSessionStats);
   document.addEventListener('click', (e) => {
     if (!$('sessionCtxMenu').hidden && !$('sessionCtxMenu').contains(e.target)) closeSessionCtxMenu();
   });

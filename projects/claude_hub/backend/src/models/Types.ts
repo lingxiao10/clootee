@@ -227,6 +227,21 @@ export interface TraceSlow {
   brief: string; // 入参摘要（≤200 字），用于一眼认出是哪次调用
 }
 
+// 细分耗时（按相邻事件的间隙归类；单位 ms）。best-effort：
+// hub 亲自跑的会话有 thinking_tokens 心跳与真实间隙，分得最准；
+// 纯终端 jsonl 反推的会话没有心跳，think/ttft 会并入 genText/genTool，只有工具与总量准确。
+export interface TracePhaseBreakdown {
+  ttft: number;     // 每轮「工具结果回来 → 模型吐出第一个 token」的等待累计（含思考首字）
+  think: number;    // 思考(extended thinking)生成
+  genTool: number;  // 生成工具调用（含大 Edit 的入参逐字吐出）
+  genText: number;  // 生成可见文字
+  toolExec: number; // 工具真实执行（tool_use ↔ tool_result 间隔）
+  bgTask: number;   // 后台任务（task_started/task_notification，如编译/PowerShell）
+  idle: number;     // 任务之间的用户空闲（不算 AI 工作时间）
+  startup: number;  // 启动/init 到首个请求
+  other: number;    // 未归类
+}
+
 export interface TraceTaskStat {
   taskId: string;
   startedAt: number;
@@ -235,14 +250,18 @@ export interface TraceTaskStat {
   toolMs: number;
   modelMs: number;
   toolCalls: number;
+  phases: TracePhaseBreakdown; // 该任务内的细分耗时
 }
 
 export interface TraceStats {
   sessionId: string;
   events: number;
-  spanMs: number;    // 首末事件时间跨度
+  spanMs: number;    // 首末事件时间跨度（含任务之间的用户空闲）
+  activeMs: number;  // AI 真正工作时间 = spanMs - phases.idle
+  rounds: number;    // 模型请求轮数（每次工具结果后重新起一个请求算一轮）
   toolMs: number;    // 工具执行总耗时
   modelMs: number;   // 模型生成/等待总耗时（事件间隙里非工具执行的部分）
+  phases: TracePhaseBreakdown; // 全会话细分耗时（thinking/生成/等首token/工具/空闲…）
   toolCalls: number;
   byTool: TraceToolStat[]; // 按总耗时倒序
   slowest: TraceSlow[];    // 最慢的 10 次调用
