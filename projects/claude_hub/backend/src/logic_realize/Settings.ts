@@ -1,6 +1,6 @@
 // 全局设置（实现）：读写 data/settings.json。
 import * as fs from 'fs';
-import { SettingsStruct, AppSettings, QuickGroup, ToolPrefMap } from '../logic_struct/SettingsStruct';
+import { SettingsStruct, AppSettings, QuickGroup, QuickTag, ToolPrefMap } from '../logic_struct/SettingsStruct';
 import type { ToolId } from '../logic_struct/ToolchainStruct';
 import { Paths } from '../paths';
 
@@ -21,26 +21,30 @@ export class Settings extends SettingsStruct {
     fs.writeFileSync(Paths.SETTINGS_FILE, JSON.stringify(s, null, 2), 'utf8');
   }
 
-  // 清洗自定义快捷标签分组：标签去空白/去重（同组内）、丢弃空组，上限 10 组 × 10 标签
+  // 清洗自定义快捷按钮分组：按钮文字去空白/去重（同组内）、丢弃空组，上限 10 组 × 10 按钮。
+  // 每个按钮可带含义提示词 prompt（上限 2000 字），每组可带组提示词 prompt。
   protected static _sanitizeQuickGroups(raw: unknown): QuickGroup[] {
     if (!Array.isArray(raw)) return [];
+    const clip = (v: unknown, n: number): string => (typeof v === 'string' ? v.trim().slice(0, n) : '');
     const out: QuickGroup[] = [];
     for (const g of raw.slice(0, 10)) {
       if (!g || typeof g !== 'object') continue;
       const src = Array.isArray((g as any).tags) ? (g as any).tags : [];
       const seen = new Set<string>();
-      const tags: { label: string }[] = [];
+      const tags: QuickTag[] = [];
       for (const t of src) {
         const label = typeof t === 'string' ? t : t && typeof t.label === 'string' ? t.label : '';
-        const clean = label.trim().slice(0, 40);
+        const clean = String(label).trim().slice(0, 40);
         if (!clean || seen.has(clean)) continue;
         seen.add(clean);
-        tags.push({ label: clean });
+        const prompt = t && typeof t === 'object' ? clip((t as any).prompt, 2000) : '';
+        tags.push(prompt ? { label: clean, prompt } : { label: clean });
         if (tags.length >= 10) break;
       }
       if (tags.length === 0) continue;
-      const name = typeof (g as any).name === 'string' ? (g as any).name.trim().slice(0, 40) : '';
-      out.push({ name: name || `组${out.length + 1}`, tags });
+      const name = clip((g as any).name, 40) || `组${out.length + 1}`;
+      const groupPrompt = clip((g as any).prompt, 2000);
+      out.push(groupPrompt ? { name, prompt: groupPrompt, tags } : { name, tags });
     }
     return out;
   }

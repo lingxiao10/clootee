@@ -3254,7 +3254,7 @@ function quickGroups() {
 // 扁平顺序（用于 Ctrl+数字 热键）：[{group, label}, ...]
 function quickFlat() {
   const out = [];
-  quickGroups().forEach((g) => (g.tags || []).forEach((t) => out.push({ group: g.name, label: t.label })));
+  quickGroups().forEach((g) => (g.tags || []).forEach((t) => out.push({ group: g.name, label: t.label, prompt: t.prompt || '' })));
   return out;
 }
 function quickLoad() {
@@ -3301,18 +3301,29 @@ function renderQuick() {
   flat.forEach((f, idx) => {
     const b = document.createElement('button');
     b.className = 'quick-tag' + (sel[f.group] === f.label ? ' on' : '');
-    b.textContent = '[' + f.label + ']';
-    b.title = idx < 9 ? 'Ctrl+' + (idx + 1) : f.label;
+    b.textContent = f.label;
+    const hint = (f.prompt || '').trim();
+    const key = idx < 9 ? 'Ctrl+' + (idx + 1) : '';
+    b.title = [key, hint].filter(Boolean).join('　') || f.label;
     b.addEventListener('click', () => setQuick(f.group, f.label));
     bar.appendChild(b);
   });
 }
-// 发送前给正文加上前缀（按组顺序拼接；未选中则原样返回）
+// 选中按钮实际插入的一段文字：优先用按钮自定义的「含义/提示词」，留空则退化为 [按钮文字]；
+// 组提示词（可选）拼在该组这段文字前面。
+function quickTagText(group, tag) {
+  const body = (tag.prompt || '').trim() || '[' + tag.label + ']';
+  const gp = (group.prompt || '').trim();
+  return gp ? gp + ' ' + body : body;
+}
+// 发送前给正文加上前缀（按组顺序拼接每个已选按钮的含义；未选中则原样返回）
 function applyQuickPrefix(text) {
   const sel = quickSel();
-  const parts = quickGroups()
-    .filter((g) => sel[g.name] && (g.tags || []).some((t) => t.label === sel[g.name]))
-    .map((g) => '[' + sel[g.name] + ']');
+  const parts = [];
+  quickGroups().forEach((g) => {
+    const tag = (g.tags || []).find((t) => t.label === sel[g.name]);
+    if (tag) parts.push(quickTagText(g, tag));
+  });
   return parts.length ? parts.join(' ') + ' ' + text : text;
 }
 
@@ -4368,6 +4379,10 @@ function bind() {
   $('settingsPaneBack').addEventListener('click', backToSettingsNav);
   $('settingsPaneClose').addEventListener('click', closeSettingsPane);
   $('settingsPaneSave').addEventListener('click', saveSettings);
+  $('quickAddGroup').addEventListener('click', () => {
+    QuickEdit.push({ name: '', prompt: '', tags: [{ label: '', prompt: '' }] });
+    renderQuickEditor();
+  });
   $('allowLanChk').addEventListener('change', renderLanGuide);
   $('lanForgotLink').addEventListener('click', toggleLanPwReset);
   $('lanPwResetBtn').addEventListener('click', resetLanPassword);
@@ -4881,13 +4896,126 @@ async function saveNetworkPane() {
 
 function fillPromptPane() {
   $('systemPromptInput').value = State.settings.systemPrompt || '';
-  $('quickGroupsInput').value = quickGroupsToText(quickGroups());
+  quickEditLoad();
 }
 async function savePromptPane() {
   await patchSettings({
     systemPrompt: $('systemPromptInput').value,
-    quickGroups: quickGroupsFromText($('quickGroupsInput').value),
+    quickGroups: quickEditCollect(),
   });
+}
+
+// ── 快捷按钮 GUI 编辑器 ──
+// QuickEdit 是进入面板时对 quickGroups 的可编辑副本；文字输入实时写回副本（不重渲染，避免丢焦点），
+// 增删分组/按钮才重渲染。保存时经 quickEditCollect 清洗后写入 settings.quickGroups。
+let QuickEdit = [];
+function quickEditLoad() {
+  QuickEdit = quickGroups().map((g) => ({
+    name: g.name || '',
+    prompt: g.prompt || '',
+    tags: (g.tags || []).map((t) => ({ label: t.label || '', prompt: t.prompt || '' })),
+  }));
+  renderQuickEditor();
+}
+// 收集为后端结构：丢掉空按钮/空组，含义/组提示词留空则不带该字段
+function quickEditCollect() {
+  const out = [];
+  for (const g of QuickEdit) {
+    const tags = [];
+    for (const t of g.tags) {
+      const label = (t.label || '').trim();
+      if (!label) continue;
+      const prompt = (t.prompt || '').trim();
+      tags.push(prompt ? { label, prompt } : { label });
+    }
+    if (!tags.length) continue;
+    const name = (g.name || '').trim() || `组${out.length + 1}`;
+    const prompt = (g.prompt || '').trim();
+    out.push(prompt ? { name, prompt, tags } : { name, tags });
+  }
+  return out;
+}
+function renderQuickEditor() {
+  const box = $('quickEditor');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!QuickEdit.length) {
+    const empty = document.createElement('div');
+    empty.className = 'qedit-empty';
+    empty.textContent = '还没有快捷按钮。点下方「＋ 添加分组」创建第一个。';
+    box.appendChild(empty);
+  }
+  QuickEdit.forEach((g, gi) => box.appendChild(quickEditGroupCard(g, gi)));
+}
+// 一个分组卡片：组名 + 组提示词 + 按钮列表 + 增/删
+function quickEditGroupCard(g, gi) {
+  const card = document.createElement('div');
+  card.className = 'qedit-group';
+
+  const head = document.createElement('div');
+  head.className = 'qedit-ghead';
+  const nameIn = document.createElement('input');
+  nameIn.className = 'sx-input qedit-gname';
+  nameIn.placeholder = '分组名称（如：深度）';
+  nameIn.value = g.name;
+  nameIn.addEventListener('input', () => (g.name = nameIn.value));
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'qedit-del-group';
+  del.textContent = '删除分组';
+  del.addEventListener('click', () => {
+    QuickEdit.splice(gi, 1);
+    renderQuickEditor();
+  });
+  head.append(nameIn, del);
+
+  const gp = document.createElement('input');
+  gp.className = 'sx-input qedit-gprompt';
+  gp.placeholder = '组提示词（可选，选中该组任一按钮时一并附加）';
+  gp.value = g.prompt;
+  gp.addEventListener('input', () => (g.prompt = gp.value));
+
+  const tagsBox = document.createElement('div');
+  tagsBox.className = 'qedit-tags';
+  g.tags.forEach((t, ti) => tagsBox.appendChild(quickEditTagRow(g, gi, t, ti)));
+
+  const addTag = document.createElement('button');
+  addTag.type = 'button';
+  addTag.className = 'qedit-add-tag';
+  addTag.textContent = '＋ 添加按钮';
+  addTag.addEventListener('click', () => {
+    g.tags.push({ label: '', prompt: '' });
+    renderQuickEditor();
+  });
+
+  card.append(head, gp, tagsBox, addTag);
+  return card;
+}
+// 一行按钮：按钮文字 + 含义/提示词 + 删除
+function quickEditTagRow(g, gi, t, ti) {
+  const row = document.createElement('div');
+  row.className = 'qedit-tag';
+  const labelIn = document.createElement('input');
+  labelIn.className = 'sx-input qedit-tlabel';
+  labelIn.placeholder = '按钮文字';
+  labelIn.value = t.label;
+  labelIn.addEventListener('input', () => (t.label = labelIn.value));
+  const promptIn = document.createElement('input');
+  promptIn.className = 'sx-input qedit-tprompt';
+  promptIn.placeholder = '含义 / 对应提示词（可选，留空则加 [按钮文字] 前缀）';
+  promptIn.value = t.prompt;
+  promptIn.addEventListener('input', () => (t.prompt = promptIn.value));
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'qedit-del-tag';
+  del.title = '删除该按钮';
+  del.textContent = '×';
+  del.addEventListener('click', () => {
+    g.tags.splice(ti, 1);
+    renderQuickEditor();
+  });
+  row.append(labelIn, promptIn, del);
+  return row;
 }
 
 function fillTemplatePane() {
@@ -5483,32 +5611,6 @@ async function saveCodexKey() {
     $('codexProfileStatus').textContent = `⚠ 保存密钥失败：${e.message}`;
   }
 }
-// 设置面板文本 ⇄ 分组结构：每行一组「组名: 标签1, 标签2」，「组名:」可省略
-function quickGroupsToText(groups) {
-  return (groups || [])
-    .map((g) => `${g.name}: ${(g.tags || []).map((t) => t.label).join(', ')}`)
-    .join('\n');
-}
-function quickGroupsFromText(text) {
-  const groups = [];
-  String(text || '')
-    .split('\n')
-    .forEach((line, i) => {
-      const raw = line.trim();
-      if (!raw) return;
-      const at = raw.indexOf(':') >= 0 ? raw.indexOf(':') : raw.indexOf('：');
-      const name = at >= 0 ? raw.slice(0, at).trim() : '';
-      const body = at >= 0 ? raw.slice(at + 1) : raw;
-      const tags = body
-        .split(/[,，]/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((label) => ({ label }));
-      if (tags.length) groups.push({ name: name || `组${i + 1}`, tags });
-    });
-  return groups;
-}
-
 // 「保存」按钮：提交当前板块的字段后回到板块列表（每个板块只管自己的字段，见 SETTINGS_PANES）
 async function saveSettings() {
   await backToSettingsNav();

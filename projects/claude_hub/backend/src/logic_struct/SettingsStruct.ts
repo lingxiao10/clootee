@@ -5,12 +5,14 @@ import { Engine } from '../models/Types';
 import { OutEnd } from '../helper/OutEnd';
 import { NetHelper } from '../helper/NetHelper';
 
-// 快捷前缀标签：一个组内互斥（单选，可取消），组与组之间互不影响（可各选一个）
+// 快捷按钮：一个组内互斥（单选，可取消），组与组之间互不影响（可各选一个）
 export interface QuickTag {
-  label: string;  // 显示文字，发送时前缀为 `[label]`
+  label: string;   // 按钮显示文字
+  prompt?: string; // 该按钮的含义/对应提示词（发送时插入正文前）；留空则回落为 `[label]` 前缀
 }
 export interface QuickGroup {
-  name: string;   // 组名（仅界面提示用）
+  name: string;    // 组名（界面提示用）
+  prompt?: string; // 组提示词（可选）：该组任一按钮被选中时一并附加
   tags: QuickTag[];
 }
 

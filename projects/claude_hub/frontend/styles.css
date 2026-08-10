@@ -2279,6 +2279,49 @@ body.light .session-item .meta .favorite-dir-badge { background: #dbeafe; color:
 .sx-btn-auto { flex: 0 0 auto; }
 .sx-btn-primary { flex: 0 0 auto; background: var(--accent, #3b6ea5); border-color: transparent; color: #fff; }
 
+/* 快捷按钮 GUI 编辑器：分组卡片 → 组名/组提示词 → 每行一个按钮（文字 + 含义） */
+.qedit { display: flex; flex-direction: column; gap: 10px; }
+.qedit-empty {
+  padding: 14px; text-align: center; font-size: 12px; color: var(--muted, #8b8f96);
+  border: 1px dashed var(--border, #333); border-radius: 8px;
+}
+.qedit-group {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; border: 1px solid var(--border, #333); border-radius: 8px;
+  background: var(--hover, rgba(255, 255, 255, .03));
+}
+.qedit-ghead { display: flex; gap: 8px; align-items: center; }
+.qedit-gname { flex: 1 1 auto; font-weight: 600; }
+.qedit-gprompt { font-size: 12px; }
+.qedit-del-group {
+  flex: 0 0 auto; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  background: transparent; color: var(--muted, #8b8f96);
+  border: 1px solid var(--border, #333); border-radius: 7px; white-space: nowrap;
+}
+.qedit-del-group:hover { color: #e57373; border-color: #e57373; }
+.qedit-tags { display: flex; flex-direction: column; gap: 6px; }
+.qedit-tag { display: flex; gap: 6px; align-items: center; }
+.qedit-tlabel { flex: 0 0 32%; }
+.qedit-tprompt { flex: 1 1 auto; font-size: 12px; }
+.qedit-del-tag {
+  flex: 0 0 auto; width: 30px; height: 30px; line-height: 1; font-size: 16px; cursor: pointer;
+  background: transparent; color: var(--muted, #8b8f96);
+  border: 1px solid var(--border, #333); border-radius: 7px;
+}
+.qedit-del-tag:hover { color: #e57373; border-color: #e57373; }
+.qedit-add-tag {
+  align-self: flex-start; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  background: transparent; color: var(--accent, #6ea8fe);
+  border: 1px dashed var(--border, #333); border-radius: 7px;
+}
+.qedit-add-tag:hover { border-color: var(--accent, #6ea8fe); }
+.qedit-add-group {
+  margin-top: 10px; width: 100%; padding: 9px; font: inherit; font-size: 13px; cursor: pointer;
+  background: var(--hover, rgba(255, 255, 255, .06)); color: var(--text, #e6e6e6);
+  border: 1px dashed var(--border, #333); border-radius: 8px;
+}
+.qedit-add-group:hover { border-color: var(--accent, #6ea8fe); }
+
 /* 勾选行：标题 + 说明分两行，文字列可收缩换行 */
 .sx-chk { display: flex; align-items: flex-start; gap: 9px; margin: 10px 0; cursor: pointer; }
 .sx-chk > input { flex: none; width: 15px; height: 15px; margin: 1px 0 0; accent-color: var(--accent, #3b6ea5); cursor: pointer; }

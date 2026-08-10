@@ -484,12 +484,13 @@
           <div class="sx-note">填写后，每次发消息前会检查当前项目工作目录的 CLAUDE.md 与 AGENTS.md（大小写均检查），未写过就自动加入（幂等，不重复追加；文件不存在则创建）。留空=关闭。</div>
           <textarea class="sx-input sx-ta" id="systemPromptInput" rows="6" placeholder="例如：回答一律使用中文；每次改动后必须 git push。"></textarea>
 
-          <div class="sx-sec">快捷前缀标签</div>
+          <div class="sx-sec">快捷按钮</div>
           <div class="sx-note">
-            每行一组，格式 <code>组名: 标签1, 标签2, 标签3</code>（省略「组名:」则自动命名）。<br />
-            同一组内<b>互斥</b>（单选，再点一次取消）；不同组之间互不影响，可各选一个。发送时按组顺序在正文前加 <code>[标签]</code> 前缀。热键 Ctrl+1..9 按标签整体顺序对应。留空=不显示标签行。
+            在输入框上方显示一排可点的快捷按钮。每个按钮对应一段<b>含义（提示词）</b>：选中后发送时会自动加到正文最前面；含义留空则退化为在正文前加 <code>[按钮文字]</code> 前缀。<br />
+            同一「分组」内的按钮<b>互斥</b>（只能选 1 个，再点一次取消）；不同分组互不影响，可各选一个。想要单个独立按钮时，新建一个只放一个按钮的分组即可。热键 Ctrl+1..9 按按钮整体顺序对应。
           </div>
-          <textarea class="sx-input sx-ta" id="quickGroupsInput" rows="4" spellcheck="false" placeholder="quick: quick, quick2, quick3&#10;深度: 深入思考, 快速回答"></textarea>
+          <div id="quickEditor" class="qedit"></div>
+          <button type="button" id="quickAddGroup" class="qedit-add-group">＋ 添加分组</button>
         </div>
 
         <!-- ═══ 板块：项目模板 ═══ -->
