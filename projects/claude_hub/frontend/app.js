@@ -8,6 +8,7 @@ const State = {
   settings: { defaultEngine: 'claude', platform: '', allowLan: false, preferBundled: false, outEndReady: false, systemPrompt: '', templateCollectionPath: '', quickGroups: [], lanUrls: [], port: 0 }, // 默认引擎 + 服务器平台 + 访问/运行时 + 局域网地址（从后端 /api/settings 加载）
   running: new Set(),                     // 正在执行任务的会话 id 集合（驱动侧栏"执行中"标识）
   justFinished: new Set(),                // 刚从执行中变为停止、且用户尚未点开查看的会话 id（驱动侧栏"刚执行"醒目标识，区别于状态"已完成"）
+  justFinishedSeen: new Set(),            // 在「刚执行完」筛选下被点开（已清除待读）的会话 id：本轮筛选内继续保留在列表中，避免点一个少一个
   tab: 'active',                          // 会话列表筛选：active / testing / completed / all
   runFilters: new Set(),                  // 运行状态筛选（与 tab 叠加）：可同时含 running / justFinished（并集）；空集=「所有」
   mode: 'classic',                       // 模式切换已下线，固定经典模式
@@ -1271,7 +1272,8 @@ const RUN_TAB_LABELS = { all: 'runTabAll', running: 'runTabRunning', justFinishe
 function matchRunFilters(s) {
   const running = State.running.has(s.id);
   if (State.runFilters.has('running') && running) return true;
-  if (State.runFilters.has('justFinished') && !running && State.justFinished.has(s.id)) return true;
+  // 已点开过的（justFinishedSeen）本轮仍留在列表里：点击不应让会话当场消失，等用户切走筛选再清掉
+  if (State.runFilters.has('justFinished') && !running && (State.justFinished.has(s.id) || State.justFinishedSeen.has(s.id))) return true;
   return false;
 }
 
@@ -1287,6 +1289,7 @@ function toggleRunFilter(key) {
   if (key === 'all') State.runFilters.clear();
   else if (State.runFilters.has(key)) State.runFilters.delete(key);
   else State.runFilters.add(key);
+  State.justFinishedSeen.clear(); // 切换筛选=开启新一轮：上一轮点开过的会话到这时才真正移出「刚执行完」
   syncRunTabs();
   renderSessions();
 }
@@ -1619,7 +1622,10 @@ function createFavoriteDraftSession() {
 
 async function selectSession(id) {
   State.sessionId = id || '';
-  if (id) State.justFinished.delete(id); // 用户点开查看，清除"刚执行"待读标识
+  // 用户点开查看，清除"刚执行"待读标识；若当前正处于「刚执行完」筛选，记入 seen 让它本轮仍留在列表里
+  if (id) {
+    if (State.justFinished.delete(id) && State.runFilters.has('justFinished')) State.justFinishedSeen.add(id);
+  }
   renderQuick(); // 快捷前缀按会话持久化，切换会话即刷新选中态
   State.aiExpandedGroups.clear();
   if (id) closeDrawer(); // 移动端：选中会话后收起抽屉
