@@ -4680,6 +4680,20 @@ function renderLanGuide() {
 // saveKeys 为空数组＝该板块没有 /api/settings 字段（如引擎板块的服务商由自己的保存按钮写 engine/config）。
 const SETTINGS_PANES = [
   {
+    id: 'runtime',
+    icon: '🔧',
+    title: () => T('paneRuntime'),
+    desc: () => T('paneRuntimeDesc'),
+    summary: () => {
+      const list = State.toolchain || [];
+      if (!list.length) return T('paneRuntimeDesc');
+      const miss = list.filter((t) => t.active === 'none').map((t) => t.label);
+      return miss.length ? `缺少：${miss.join('、')}` : `全部就绪（${list.length} 项）`;
+    },
+    fill: fillRuntimePane,
+    save: null, // 来源偏好改一个存一个（见 setToolPref），不走 pane 的统一保存
+  },
+  {
     id: 'engine',
     icon: '🤖',
     title: () => T('paneEngine'),
@@ -4721,20 +4735,6 @@ const SETTINGS_PANES = [
     summary: () => State.settings.templateCollectionPath || T('paneTemplateEmpty'),
     fill: fillTemplatePane,
     save: saveTemplatePane,
-  },
-  {
-    id: 'runtime',
-    icon: '🔧',
-    title: () => T('paneRuntime'),
-    desc: () => T('paneRuntimeDesc'),
-    summary: () => {
-      const list = State.toolchain || [];
-      if (!list.length) return T('paneRuntimeDesc');
-      const miss = list.filter((t) => t.active === 'none').map((t) => t.label);
-      return miss.length ? `缺少：${miss.join('、')}` : `全部就绪（${list.length} 项）`;
-    },
-    fill: fillRuntimePane,
-    save: null, // 来源偏好改一个存一个（见 setToolPref），不走 pane 的统一保存
   },
 ];
 function paneById(id) {
