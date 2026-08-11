@@ -1052,14 +1052,37 @@ function sessionHasRunning(s) {
 function updateRunningFromTask(sessionId, task) {
   if (!sessionId || !task) return;
   const before = State.running.has(sessionId);
+  let reordered = false;
   if (task.status === 'running') {
     State.running.add(sessionId);
     State.justFinished.delete(sessionId);
+    // 开始执行即把该会话的更新时间顶到最新，让它在列表里浮到最上面
+    // （与后端 _markRunning 落库的 updatedAt 保持一致；否则前端缓存的旧时间不会重排）
+    reordered = bumpSessionUpdatedAt(sessionId, task.startedAt || Date.now());
   } else {
     State.running.delete(sessionId);
     if (before && sessionId !== State.sessionId) State.justFinished.add(sessionId);
   }
-  if (State.running.has(sessionId) !== before) renderSessions();
+  if (reordered || State.running.has(sessionId) !== before) renderSessions();
+}
+
+// 把某会话的 updatedAt 顶到给定时间并就地重排会话列表（含收藏夹列表）。返回是否命中该会话。
+// 用于「开始执行的会话立即浮到列表最上面」：仅改前端缓存排序，不发请求（后端已在 _markRunning 落库同一时间）。
+function bumpSessionUpdatedAt(sessionId, ts) {
+  let hit = false;
+  const apply = (arr) => {
+    if (!Array.isArray(arr)) return arr;
+    const s = arr.find((x) => x.id === sessionId);
+    if (!s) return arr;
+    if ((s.updatedAt || 0) < ts) s.updatedAt = ts;
+    hit = true;
+    return sortSessionsForList(arr);
+  };
+  const favAliased = State.sessions === State.favoriteSessions;
+  State.favoriteSessions = apply(State.favoriteSessions);
+  if (favAliased) State.sessions = State.favoriteSessions;
+  else State.sessions = apply(State.sessions);
+  return hit;
 }
 
 function sortSessionsForList(sessions) {
