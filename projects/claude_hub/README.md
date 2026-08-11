@@ -1,4 +1,4 @@
-# Rubato — 本地 Claude 多会话任务工作台
+# Clootee — 本地 Claude 多会话任务工作台
 
 通过本地 `claude` CLI 工作的一个 Web 工具，兼容 PC 与移动端。
 

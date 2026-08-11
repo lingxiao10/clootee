@@ -1,6 +1,6 @@
 <div align="center">
 
-# Rubato
+# Clootee
 
 ### Claude Code in your browser — unzip, double-click, done.
 
@@ -19,7 +19,7 @@ English · [中文](README_zh.md)
 ## The whole idea
 
 Every other tool starts with "first install Node, then `npm install -g …`, then open a terminal and
-sign in". **Rubato does all of that for you, from a web page.**
+sign in". **Clootee does all of that for you, from a web page.**
 
 ```
 ① Unzip   →   ② Double-click start.bat   →   ③ Follow the wizard
@@ -27,7 +27,7 @@ sign in". **Rubato does all of that for you, from a web page.**
 
 That's it. Whatever is missing, the wizard installs — with a progress bar, not a blank screen.
 
-| Normally you'd have to… | In Rubato |
+| Normally you'd have to… | In Clootee |
 |---|---|
 | Install Node.js and fix your PATH | Downloads a portable copy into its own folder |
 | `npm install -g @anthropic-ai/claude-code` | One click, live progress |
@@ -39,13 +39,13 @@ That's it. Whatever is missing, the wizard installs — with a progress bar, not
 
 ## Two things people always get stuck on
 
-**🌐 "It just doesn't respond."** — Rubato checks connectivity *before* you hit that wall, and gives
+**🌐 "It just doesn't respond."** — Clootee checks connectivity *before* you hit that wall, and gives
 you two concrete ways out: turn on your VPN and re-check, or switch to a China-based model
 (MiniMax / Kimi / Xiaomi MiMo) with one click. Only providers that are **actually reachable right now**
 are offered.
 
 **🔑 "It says nothing at all."** — Stock Claude Code must be signed in, or messages get no reply *and*
-no error. Rubato moves sign-in into the UI: click the button, open the link, authorize, paste the code
+no error. Clootee moves sign-in into the UI: click the button, open the link, authorize, paste the code
 back. Works even when the server is remote — the link opens in *your* browser.
 
 ---
@@ -74,7 +74,7 @@ On macOS / Linux run `chmod +x start.sh stop.sh` once first.
 
 ## ⚠️ Security — please read
 
-Rubato runs Claude Code with **permission prompts bypassed** so tasks can run unattended:
+Clootee runs Claude Code with **permission prompts bypassed** so tasks can run unattended:
 
 > **Anyone who can open this web UI can run any command on your machine, as you.**
 

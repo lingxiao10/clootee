@@ -1,6 +1,6 @@
 // 国际化字典与翻译函数。至少支持 zh / en
 const DICT = {
-  title: { en: 'Rubato', zh: 'Rubato' },
+  title: { en: 'Clootee', zh: 'Clootee' },
   tagline: {
     en: 'Making Claude Code / Codex easier to use',
     zh: '让 Claude Code / Codex 更易用',
@@ -310,7 +310,7 @@ const DICT = {
       </div>
       <p class="guide-tip">💡 小提示：随时点右上角的 <b>📖</b> 就能再打开这份指南。祝你用得开心！</p>`,
     en: `
-      <p class="guide-intro">👋 Welcome to <b>Rubato</b>! It’s a local tool that lets Claude do your coding tasks for you. Here’s how to get going in a few steps~</p>
+      <p class="guide-intro">👋 Welcome to <b>Clootee</b>! It’s a local tool that lets Claude do your coding tasks for you. Here’s how to get going in a few steps~</p>
       <div class="guide-sec">
         <h3>📁 Step 1 · Pick a working directory</h3>
         <p>Choose a “workspace” (your project folder) at the top — that’s where Claude works. First time? Click <b>＋</b> to add one, or <b>🗂</b> to manage several.</p>
