@@ -5,13 +5,34 @@
 // - 模型列表：走服务商 OpenAI 兼容 /v1/models（实时），**无内置兜底**，失败即报错让用户改 Key。
 // 具体 IO（读写 data/engines.json、HTTP 拉取、写 ~/.claude/settings.json）由 Realize 实现。
 import {
+  EffortLevel,
+  EngineFileEntry,
   EnginesConfig,
+  EnginesFile,
   EngineProvider,
   EngineProviderConfig,
   ModelDetect,
   ModelOption,
+  ProviderSlot,
 } from '../models/Types';
 import { EnvHelper } from '../helper/EnvHelper';
+
+// 思考强度候选。claude 原生支持全部 5 档（`--effort`）；
+// codex 的 model_reasoning_effort 只认 low/medium/high，故 xhigh/max 在 codex 侧降级到 high。
+export const EFFORT_LEVELS: Array<{ id: Exclude<EffortLevel, ''>; label: string; codex: string }> = [
+  { id: 'low', label: '低（最快、最省）', codex: 'low' },
+  { id: 'medium', label: '中（均衡）', codex: 'medium' },
+  { id: 'high', label: '高（更仔细）', codex: 'high' },
+  { id: 'xhigh', label: '极高（复杂任务）', codex: 'high' },
+  { id: 'max', label: '最高（最强推理，最慢）', codex: 'high' },
+];
+
+// 某字符串是否为合法 effort（''=自动，合法）
+export function isEffort(v: unknown): v is EffortLevel {
+  return v === '' || v === undefined || v === null
+    ? true
+    : typeof v === 'string' && EFFORT_LEVELS.some((e) => e.id === v);
+}
 
 // 各服务商元信息（域内配置，非通用 helper）
 export interface ProviderMeta {
@@ -95,24 +116,60 @@ export function isProvider(v: unknown): v is EngineProvider {
 }
 
 const DEFAULT: EnginesConfig = {
-  claude: { provider: 'official', apiKey: '', model: '' },
-  codex: { provider: 'official', apiKey: '', model: '' },
+  claude: { provider: 'official', apiKey: '', model: '', effort: '' },
+  codex: { provider: 'official', apiKey: '', model: '', effort: '' },
 };
 
+// 空槽（每个服务商的出厂设置）
+function emptySlot(): ProviderSlot {
+  return { apiKey: '', model: '', effort: '' };
+}
+
 export class EngineConfigStruct {
-  // 读取配置（缺失回退 official）
+  // 读取配置：把「当前选中服务商」那一槽投影成扁平视图。
+  // 所有下游（ClaudeRunner / CodexRunner / ModelManager / 前端）都读这个投影，
+  // 因此换服务商后绝不可能看到别的服务商的 Key / 模型 / 候选列表。
   static get(): EnginesConfig {
-    const raw = this._read();
+    const file = this._readFile();
     return {
-      claude: this._normalize(raw?.claude),
-      codex: this._normalize(raw?.codex),
+      claude: this._project(file.claude),
+      codex: this._project(file.codex),
     };
   }
 
-  // 更新某引擎的服务商配置；写盘后应用 claude 环境变量到本进程
-  static setProvider(engine: keyof EnginesConfig, cfg: EngineProviderConfig): EnginesConfig {
+  // 读取全部服务商的槽（供前端「换服务商即回显该服务商自己上次的设置」）
+  static slots(engine: keyof EnginesConfig): Partial<Record<EngineProvider, ProviderSlot>> {
+    this._assertEngine('slots', engine);
+    return this._readFile()[engine].slots;
+  }
+
+  // 把「当前选中服务商」的槽投影成扁平视图
+  private static _project(entry: EngineFileEntry): EngineProviderConfig {
+    const provider = entry.provider;
+    const slot = entry.slots[provider] || emptySlot();
+    return {
+      provider,
+      // official 没有 API Key 的概念——投影时强制清空，
+      // 免得任何下游（含 claudeEnv/codexUpstream）误把第三方 Key 用在原版上。
+      apiKey: provider === 'official' ? '' : slot.apiKey || '',
+      model: slot.model || '',
+      effort: isEffort(slot.effort) ? (slot.effort as EffortLevel) || '' : '',
+      baseUrl: provider === 'custom' ? slot.baseUrl || '' : '',
+      modelsUrl: provider === 'custom' ? slot.modelsUrl || '' : '',
+      models: Array.isArray(slot.models) ? slot.models : undefined,
+      detected: slot.detected,
+    };
+  }
+
+  private static _assertEngine(who: string, engine: unknown): void {
     if (engine !== 'claude' && engine !== 'codex')
-      throw new Error(`setProvider: invalid engine=${engine}`);
+      throw new Error(`${who}: invalid engine=${engine}`);
+  }
+
+  // 更新某引擎的服务商配置；只写「该服务商自己那一槽」，其余服务商的设置原样保留。
+  // 写盘后应用 claude 环境变量到本进程。
+  static setProvider(engine: keyof EnginesConfig, cfg: EngineProviderConfig): EnginesConfig {
+    this._assertEngine('setProvider', engine);
     const provider = cfg?.provider;
     if (!isProvider(provider))
       throw new Error(`setProvider: invalid provider=${provider}（可选 official/${THIRD_PARTY_PROVIDERS.join('/')}）`);
@@ -122,57 +179,78 @@ export class EngineConfigStruct {
     // 无兜底模型：claude 走第三方端点时必须选定真实模型，否则 claude 会按 sonnet 别名请求 → 对方 404
     if (engine === 'claude' && provider !== 'official' && !(cfg.model || '').trim())
       throw new Error(`setProvider: ${provider} 需要先「拉取模型」并选定一个模型`);
-    const next = this.get();
-    const prev = next[engine];
-    // 模型跟随服务商：换回 official 时模型是可选项（不像第三方那样强制校验非空），
-    // 若不强制清空，前端残留的旧服务商模型 id 会被当成 official 的选定模型一路传下去
-    // （ClaudeRunner/CodexRunner 对 official 同样会把 cfg.model 当 --model/-m 传给 CLI）。
-    const model = provider === 'official' && provider !== prev.provider ? '' : (cfg.model || '').trim();
-    next[engine] = {
-      provider,
-      apiKey: (cfg.apiKey || '').trim(),
-      model,
-      baseUrl: provider === 'custom' ? this._cleanUrl(cfg.baseUrl || '') : undefined,
-      modelsUrl: provider === 'custom' && cfg.modelsUrl
-        ? this._cleanUrl(cfg.modelsUrl)
-        : undefined,
-      // 换服务商时候选列表已失效（不同服务商模型不同），清掉；检测结果同理
-      models: provider === prev.provider ? prev.models : undefined,
-      detected: provider === prev.provider ? prev.detected : undefined,
+    if (!isEffort(cfg.effort))
+      throw new Error(`setProvider: invalid effort=${cfg.effort}`);
+
+    const file = this._readFile();
+    const entry = file[engine];
+    const prevSlot = entry.slots[provider] || emptySlot();
+    // 候选列表随「Key / Base URL」变化而失效（换了账号 → 可用模型可能不同），
+    // 同一服务商同一 Key 则保留缓存，免得每次保存都要重新拉一遍。
+    const apiKey = provider === 'official' ? '' : (cfg.apiKey || '').trim();
+    const baseUrl = provider === 'custom' ? this._cleanUrl(cfg.baseUrl || '') : '';
+    const keyChanged = prevSlot.apiKey !== apiKey || (prevSlot.baseUrl || '') !== baseUrl;
+
+    entry.provider = provider;
+    entry.slots[provider] = {
+      apiKey,
+      model: (cfg.model || '').trim(),
+      effort: (cfg.effort || '') as EffortLevel,
+      baseUrl: provider === 'custom' ? baseUrl : undefined,
+      modelsUrl: provider === 'custom' && cfg.modelsUrl ? this._cleanUrl(cfg.modelsUrl) : undefined,
+      models: keyChanged ? undefined : prevSlot.models,
+      detected: keyChanged ? undefined : prevSlot.detected,
     };
-    this._write(next);
+    this._writeFile(file);
     this.applyEnv();
     return this.get();
   }
 
-  // 只改「选定模型」，不动服务商/apiKey。'' = 自动（由引擎自己决定）。
+  // 只改「选定模型」，不动服务商/apiKey。'' = 自动（由引擎自己决定）。写入当前服务商的槽。
   static setModel(engine: keyof EnginesConfig, model: string): EnginesConfig {
-    if (engine !== 'claude' && engine !== 'codex')
-      throw new Error(`setModel: invalid engine=${engine}`);
+    this._assertEngine('setModel', engine);
     if (typeof model !== 'string') throw new Error(`setModel: invalid model=${model}`);
-    const next = this.get();
-    next[engine] = { ...next[engine], model: model.trim() };
-    this._write(next);
+    this._patchSlot(engine, (slot) => ({ ...slot, model: model.trim() }));
     this.applyEnv();
     return this.get();
   }
 
-  // 缓存检测结果（候选列表 / 当前模型），供前端下拉与状态展示
+  // 只改「思考强度」。'' = 自动（不传 --effort / model_reasoning_effort）。写入当前服务商的槽。
+  static setEffort(engine: keyof EnginesConfig, effort: string): EnginesConfig {
+    this._assertEngine('setEffort', engine);
+    if (!isEffort(effort))
+      throw new Error(
+        `setEffort: invalid effort=${effort}（可选 ''(自动)/${EFFORT_LEVELS.map((e) => e.id).join('/')}）`,
+      );
+    this._patchSlot(engine, (slot) => ({ ...slot, effort: (effort || '') as EffortLevel }));
+    this.applyEnv();
+    return this.get();
+  }
+
+  // 缓存检测结果（候选列表 / 当前模型），供前端下拉与状态展示。写入当前服务商的槽，
+  // 因此 MiniMax 的候选列表绝不会出现在原版下。
   static setCache(
     engine: keyof EnginesConfig,
     patch: { models?: ModelOption[]; detected?: ModelDetect },
   ): EnginesConfig {
-    if (engine !== 'claude' && engine !== 'codex')
-      throw new Error(`setCache: invalid engine=${engine}`);
-    const next = this.get();
-    const cur = next[engine];
-    next[engine] = {
-      ...cur,
-      models: patch.models !== undefined ? patch.models : cur.models,
-      detected: patch.detected !== undefined ? patch.detected : cur.detected,
-    };
-    this._write(next);
+    this._assertEngine('setCache', engine);
+    this._patchSlot(engine, (slot) => ({
+      ...slot,
+      models: patch.models !== undefined ? patch.models : slot.models,
+      detected: patch.detected !== undefined ? patch.detected : slot.detected,
+    }));
     return this.get();
+  }
+
+  // 对「当前选中服务商」那一槽做局部更新（唯一的槽写入通道）
+  private static _patchSlot(
+    engine: keyof EnginesConfig,
+    fn: (slot: ProviderSlot) => ProviderSlot,
+  ): void {
+    const file = this._readFile();
+    const entry = file[engine];
+    entry.slots[entry.provider] = fn(entry.slots[entry.provider] || emptySlot());
+    this._writeFile(file);
   }
 
   // 当前 claude 服务商对应的托管环境变量（official / 未填 Key → 空对象＝全部清除）
@@ -187,6 +265,9 @@ export class EngineConfigStruct {
       ANTHROPIC_AUTH_TOKEN: cfg.apiKey,
       ...(meta?.extraEnv || {}),
     };
+    // 用户显式选了思考强度 → 覆盖服务商 extraEnv 里写死的那个（如 kimi 的 max）。
+    // 命令行 `--effort` 也会传同一个值，两处保持一致。
+    if (cfg.effort) env.CLAUDE_CODE_EFFORT_LEVEL = cfg.effort;
     if (!cfg.model) return env;
     return {
       ...env,
@@ -197,6 +278,15 @@ export class EngineConfigStruct {
       ANTHROPIC_DEFAULT_FABLE_MODEL: cfg.model,
       CLAUDE_CODE_SUBAGENT_MODEL: cfg.model,
     };
+  }
+
+  // codex 侧的思考强度取值（''=自动/不传）。codex 的 model_reasoning_effort 只认
+  // low/medium/high，所以 claude 的 xhigh/max 按 EFFORT_LEVELS 映射降级到 high。
+  static codexEffort(): string {
+    const effort = this.get().codex.effort;
+    if (!effort) return '';
+    const meta = EFFORT_LEVELS.find((e) => e.id === effort);
+    return meta ? meta.codex : '';
   }
 
   static codexUpstream(): { baseUrl: string; apiKey: string; model: string; label: string } {
@@ -286,25 +376,75 @@ export class EngineConfigStruct {
     ];
   }
 
-  private static _normalize(c: EngineProviderConfig | undefined): EngineProviderConfig {
-    const provider: EngineProvider = isProvider(c?.provider) ? c!.provider : 'official';
+  // 读盘并归一化成分槽结构（兼容旧版扁平格式）
+  private static _readFile(): EnginesFile {
+    const raw = this._read() as any;
     return {
-      provider,
-      apiKey: c?.apiKey || '',
-      model: c?.model || '',
-      baseUrl: c?.baseUrl || '',
-      modelsUrl: c?.modelsUrl || '',
-      models: Array.isArray(c?.models) ? c!.models : undefined,
-      detected: c?.detected,
+      claude: this._normalizeEntry(raw?.claude),
+      codex: this._normalizeEntry(raw?.codex),
+    };
+  }
+
+  // 归一化一个引擎条目。
+  // **向后兼容**：旧版 engines.json 是扁平的 `{provider, apiKey, model, models, detected}`，
+  // 所有服务商共用一份字段（正是「选原版却看到 MiniMax 模型」的根因）。
+  // 迁移策略：把旧的那一份数据**只归到它当时选中的那个服务商槽**里；
+  // 若旧记录是 official 却带着第三方 Key/模型缓存（历史脏数据），一并丢弃——
+  // official 槽永远不该有 Key，模型候选也应由内置清单重新生成。
+  private static _normalizeEntry(raw: any): EngineFileEntry {
+    const provider: EngineProvider = isProvider(raw?.provider) ? raw.provider : 'official';
+    const slots: Partial<Record<EngineProvider, ProviderSlot>> = {};
+
+    if (raw && typeof raw === 'object' && raw.slots && typeof raw.slots === 'object') {
+      for (const [k, v] of Object.entries(raw.slots as Record<string, any>)) {
+        if (!isProvider(k) || !v || typeof v !== 'object') continue;
+        slots[k] = this._normalizeSlot(k as EngineProvider, v);
+      }
+    } else if (raw && typeof raw === 'object') {
+      // 旧版扁平结构 → 迁移到当前服务商那一槽
+      slots[provider] = this._normalizeSlot(provider, raw);
+    }
+    if (!slots[provider]) slots[provider] = emptySlot();
+    return { provider, slots };
+  }
+
+  private static _normalizeSlot(provider: EngineProvider, v: any): ProviderSlot {
+    const isOfficial = provider === 'official';
+    // official 槽强制无 Key：历史脏数据（official 却存着第三方 Key）在这里被清掉
+    const apiKey = isOfficial ? '' : String(v.apiKey || '');
+    let models = Array.isArray(v.models) ? (v.models as ModelOption[]) : undefined;
+    let model = String(v.model || '');
+    if (isOfficial) {
+      // `source:'api'` 的候选只可能来自第三方 /v1/models —— 原版永远不该有。
+      // 这是「选原版却在下拉里看到 MiniMax / 小米模型」的最后一道闸：
+      // 无论是旧版扁平脏数据还是别处写歪，读出来就被过滤掉。
+      const legit = (models || []).filter((m) => m && m.source !== 'api');
+      models = legit.length ? legit : undefined;
+      // 选定模型若来自第三方候选（不在剩余候选里、且这条记录带过第三方 Key）→ 一并丢弃
+      if (model && v.apiKey && !legit.some((m) => m.id === model)) model = '';
+    }
+    return {
+      apiKey,
+      model,
+      effort: isEffort(v.effort) ? ((v.effort || '') as EffortLevel) : '',
+      baseUrl: provider === 'custom' ? String(v.baseUrl || '') : undefined,
+      modelsUrl: provider === 'custom' ? String(v.modelsUrl || '') : undefined,
+      models,
+      detected: v.detected,
     };
   }
 
   // ── IO 钩子（Realize 实现）──
+  // 返回落盘的原始 JSON（可能是旧的扁平结构，由 _normalizeEntry 兼容处理）
   protected static _read(): EnginesConfig | null {
     throw new Error('Not implemented');
   }
   protected static _write(_c: EnginesConfig): void {
     throw new Error('Not implemented');
+  }
+  // 写入分槽结构。默认转调 _write（Realize 里两者都落到同一个文件）。
+  protected static _writeFile(c: EnginesFile): void {
+    this._write(c as unknown as EnginesConfig);
   }
   // 拉取模型 id 列表（Realize 用 HttpJson 实现）
   protected static _fetchModels(_url: string, _apiKey: string): Promise<string[]> {

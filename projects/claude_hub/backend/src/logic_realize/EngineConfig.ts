@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { EngineConfigStruct, MANAGED_ENV_KEYS } from '../logic_struct/EngineConfigStruct';
-import { EnginesConfig } from '../models/Types';
+import { EnginesConfig, EnginesFile } from '../models/Types';
 import { HttpJson } from '../helper/HttpJson';
 import { ClaudeStoreHelper } from '../helper/ClaudeStoreHelper';
 import { EnvHelper } from '../helper/EnvHelper';
@@ -14,6 +14,8 @@ import { AppConfig } from '../config/AppConfig';
 import { EngineProviderConfig } from '../models/Types';
 
 export class EngineConfig extends EngineConfigStruct {
+  // 返回落盘的原始 JSON。可能是旧的扁平结构（各服务商共用一份字段），
+  // 归一化与迁移由 Struct 的 _normalizeEntry 负责，这里只管读。
   protected static _read(): EnginesConfig | null {
     try {
       if (!fs.existsSync(Paths.ENGINES_FILE)) return null;
@@ -24,6 +26,11 @@ export class EngineConfig extends EngineConfigStruct {
   }
 
   protected static _write(c: EnginesConfig): void {
+    fs.mkdirSync(path.dirname(Paths.ENGINES_FILE), { recursive: true });
+    fs.writeFileSync(Paths.ENGINES_FILE, JSON.stringify(c, null, 2), 'utf8');
+  }
+
+  protected static _writeFile(c: EnginesFile): void {
     fs.mkdirSync(path.dirname(Paths.ENGINES_FILE), { recursive: true });
     fs.writeFileSync(Paths.ENGINES_FILE, JSON.stringify(c, null, 2), 'utf8');
   }

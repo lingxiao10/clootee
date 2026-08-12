@@ -19,6 +19,7 @@
 // 具体 IO（spawn 引擎、读 config.toml、HTTP）由 Realize 实现。
 import { Engine, EngineModelState, ModelDetect, ModelOption, ModelsState } from '../models/Types';
 import { EngineConfig } from '../logic_realize/EngineConfig';
+import { EFFORT_LEVELS } from './EngineConfigStruct';
 
 // 原版 claude 的内置候选：别名（会被 CLI 解析成最新全名）+ 常用全名。
 // 只作为下拉候选，不代表账号一定有权限；真实可用性由 verify 或 detect 确认。
@@ -43,6 +44,13 @@ export class ModelManagerStruct {
   static setModel(engine: Engine, model: string): ModelsState {
     this._assertEngine('setModel', engine);
     EngineConfig.setModel(engine, model || '');
+    return this.state();
+  }
+
+  // ── 选定思考强度（''=自动）──
+  static setEffort(engine: Engine, effort: string): ModelsState {
+    this._assertEngine('setEffort', engine);
+    EngineConfig.setEffort(engine, effort || '');
     return this.state();
   }
 
@@ -73,12 +81,16 @@ export class ModelManagerStruct {
     return [{ id: d.model, label: `${d.model}（当前实际）`, source: 'detected', verified: true }, ...opts];
   }
 
+  // 当前状态取自 EngineConfig.get() 的**投影视图**（只含当前服务商那一槽），
+  // 所以 options/selected 绝不会混进别的服务商的模型。
   private static _one(engine: Engine): EngineModelState {
     const c = EngineConfig.get()[engine];
     return {
       engine,
       provider: c.provider,
       selected: c.model || '',
+      effort: c.effort || '',
+      efforts: EFFORT_LEVELS.map((e) => ({ id: e.id, label: e.label })),
       options: c.models || [],
       detected: c.detected,
     };

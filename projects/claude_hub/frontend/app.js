@@ -4639,6 +4639,9 @@ function bind() {
   // 同一个下拉（claudeModelSelect/codexModelSelect）与「服务商」区共用，服务商变了会被清空重选
   $('claudeModelSelect').addEventListener('change', () => onModelSelect('claude'));
   $('codexModelSelect').addEventListener('change', () => onModelSelect('codex'));
+  // 思考强度：两个引擎各一个下拉，''=自动
+  $('claudeEffortSelect').addEventListener('change', () => onEffortSelect('claude'));
+  $('codexEffortSelect').addEventListener('change', () => onEffortSelect('codex'));
   $('mdlClaudeDetectBtn').addEventListener('click', () => detectCurrentModel('claude'));
   $('mdlCodexDetectBtn').addEventListener('click', () => detectCurrentModel('codex'));
   $('mdlClaudeListBtn').addEventListener('click', () => detectAvailableModels('claude'));
@@ -5422,7 +5425,9 @@ function renderAccSummary(engine) {
   const opt = u.select.options[u.select.selectedIndex];
   const providerLabel = opt ? opt.text.split(/[（(]/)[0].trim() : u.select.value;
   const modelLabel = u.model.value || '自动';
-  accUi(engine).sum.textContent = `${providerLabel} · ${modelLabel}`;
+  // 强度非自动时才进摘要（避免每个引擎都挂一个「自动」显得啰嗦）
+  const effort = u.effort ? u.effort.value : '';
+  accUi(engine).sum.textContent = `${providerLabel} · ${modelLabel}${effort ? ' · ' + effort : ''}`;
 }
 
 // ── 模型选择（claude / codex 各自一套；''=自动）──
@@ -5461,6 +5466,7 @@ function renderModelSection(engine, s) {
     sel.appendChild(new Option(`${s.selected}（已选定）`, s.selected));
   }
   sel.value = s.selected || '';
+  renderEffortSelect(engine, s);
   const d = s.detected;
   if (d) {
     setModelStatus(
@@ -5548,28 +5554,95 @@ function providerUi(engine) {
     select: $(`${p}ProviderSelect`), cfg: $(`${p}ProviderCfg`), custom: $(`${p}CustomCfg`),
     key: $(`${p}ApiKey`), base: $(`${p}BaseUrl`), modelsUrl: $(`${p}ModelsUrl`),
     model: $(`${p}ModelSelect`), modelBox: $(`${p}ModelBox`), status: $(`${p}ProviderStatus`),
+    effort: $(`${p}EffortSelect`),
   };
 }
+
+// 思考强度档位（后端 /api/model/state 下发，避免前端写死一份）。
+// 兜底值只在后端尚未重启（旧版无 efforts 字段）时使用。
+const EFFORT_FALLBACK = [
+  { id: 'low', label: '低（最快、最省）' },
+  { id: 'medium', label: '中（均衡）' },
+  { id: 'high', label: '高（更仔细）' },
+  { id: 'xhigh', label: '极高（复杂任务）' },
+  { id: 'max', label: '最高（最强推理，最慢）' },
+];
+
+// 渲染某引擎的思考强度下拉。所有服务商（含原版）都可选。
+function renderEffortSelect(engine, s) {
+  const sel = providerUi(engine).effort;
+  if (!sel) return;
+  const levels = (s && Array.isArray(s.efforts) && s.efforts.length) ? s.efforts : EFFORT_FALLBACK;
+  const cur = (s && s.effort) || '';
+  sel.innerHTML = '';
+  sel.appendChild(new Option('自动（交给引擎决定）', ''));
+  for (const e of levels) sel.appendChild(new Option(e.label || e.id, e.id));
+  sel.value = cur;
+}
+
+// 选定思考强度；立即落盘，下一个任务生效
+async function onEffortSelect(engine) {
+  const sel = providerUi(engine).effort;
+  const effort = sel.value || '';
+  try {
+    await api('/api/model/effort', { engine, effort });
+    const label = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : effort;
+    setModelStatus(engine, effort ? `思考强度已设为「${label}」，下一个任务生效。` : '思考强度已设为自动，下一个任务生效。', true);
+    renderAccSummary(engine);
+  } catch (e) {
+    setModelStatus(engine, `保存失败：${e.message}`, false);
+  }
+}
 // 只管显示/隐藏，不动模型选择——供「读取已保存配置后同步一次界面」调用，不清空当前模型
-// 模型整块（含高级选项）是服务商的下游：原版订阅由官方账号定模型 → 整块隐藏，界面更干净
+// 原版订阅也可以选择模型（如 opus/sonnet/haiku/fable），所以模型选择框始终显示
 function syncProviderVisibility(engine) {
   const u = providerUi(engine);
   const provider = u.select.value;
   u.cfg.hidden = provider === 'official';
   u.custom.hidden = provider !== 'custom';
-  u.modelBox.hidden = provider === 'official';
+  // 模型选择框始终显示，允许原版订阅也选择模型
 }
-// 用户在下拉里手动切换服务商 → 联动：旧服务商的模型候选/选定值对新服务商没有意义，清空强制重选
-// （修复：换回原版后不会残留第三方服务商的模型 id 被当作 --model 传给 CLI）
-// 清空后立刻 autoPickModel：模型是服务商的下游，用户不该被迫手点「获取模型」。
-function onEngineProviderChange(engine) {
+// 用户在下拉里手动切换服务商 → 联动：**彻底隔离**。
+// 每个服务商在后端各有一槽（apiKey/model/effort/候选缓存），切过去就回显它自己上次的设置；
+// 该服务商从没配过就清空并自动定档。这是「选原版却看到 MiniMax 模型」那个 bug 的前端一半。
+async function onEngineProviderChange(engine) {
   syncProviderVisibility(engine);
   const u = providerUi(engine);
+  const provider = u.select.value;
+  // 先清干净，绝不让上一个服务商的值留在表单里
   u.model.innerHTML = '';
+  u.key.value = '';
+  u.base.value = '';
+  u.modelsUrl.value = '';
+  if (u.effort) u.effort.value = '';
   setModelStatus(engine, '', null);
   syncModelProviderTag(engine);
   renderAccSummary(engine);
-  autoPickModel(engine);
+  // 回显该服务商自己保存过的那一槽
+  let slot = null;
+  try {
+    const r = await api(`/api/engine/slots?engine=${engine}`);
+    slot = (r && r.slots && r.slots[provider]) || null;
+  } catch (e) {
+    // 后端未重启时该端点 404 → 降级为「当作没配过」，不阻断
+  }
+  if (slot) {
+    u.key.value = slot.apiKey || '';
+    u.base.value = slot.baseUrl || '';
+    u.modelsUrl.value = slot.modelsUrl || '';
+    const opts = Array.isArray(slot.models) ? slot.models : [];
+    if (opts.length || slot.model) {
+      u.model.appendChild(new Option('自动（交给引擎决定）', ''));
+      for (const o of opts) u.model.appendChild(new Option(o.label || o.id, o.id));
+      if (slot.model && !opts.some((o) => o.id === slot.model))
+        u.model.appendChild(new Option(`${slot.model}（已选定）`, slot.model));
+      u.model.value = slot.model || '';
+    }
+    if (u.effort) u.effort.value = slot.effort || '';
+    renderAccSummary(engine);
+  }
+  // 没有选定模型才自动定档（不覆盖用户上次的选择）
+  if (!u.model.value) autoPickModel(engine);
 }
 // 「模型」标签旁的服务商小标要跟着表单里选中的服务商走
 // （否则会一直显示上次已保存的那个，和下面的模型对不上）
@@ -5586,8 +5659,28 @@ async function autoPickModel(engine) {
   const u = providerUi(engine);
   const provider = u.select.value;
   if (provider === 'official') {
-    // 原版订阅由官方账号决定模型，无需也不应指定
-    setModelStatus(engine, T('modelAutoOfficial'), null);
+    // 原版订阅也可以选择模型：如果没有选定模型，自动填充内置候选列表
+    if (u.model.value) return; // 已有模型就不动
+    // 从后端获取可用模型列表（对于 official，返回内置候选）
+    try {
+      const r = await api('/api/model/available', { engine, verify: false });
+      const models = r && r.models ? r.models : [];
+      if (models.length > 0) {
+        u.model.innerHTML = '';
+        u.model.appendChild(new Option('自动（交给引擎决定）', ''));
+        for (const m of models) {
+          u.model.appendChild(new Option(m.label || m.id, m.id));
+        }
+        // 默认选中 opus（如果有）
+        const defaultModel = models.find(m => m.id === 'opus') || models[0];
+        if (defaultModel) {
+          u.model.value = defaultModel.id;
+          setModelStatus(engine, `已自动选择 ${defaultModel.label || defaultModel.id}`, true);
+        }
+      }
+    } catch (e) {
+      setModelStatus(engine, `获取模型列表失败：${e.message}`, false);
+    }
     return;
   }
   if (u.model.value) return; // 已有模型就不动，避免覆盖用户的选择
@@ -5621,6 +5714,7 @@ async function loadEngineProvider(engine) {
       const o = document.createElement('option'); o.value = c.model; o.textContent = c.model;
       u.model.appendChild(o);
     }
+    if (u.effort) u.effort.value = c.effort || '';
     syncProviderVisibility(engine);
     syncModelProviderTag(engine);
     u.status.className = 'sx-note';
@@ -5629,6 +5723,10 @@ async function loadEngineProvider(engine) {
       ? `已保存：原版${engine === 'claude' ? '订阅' : ' ChatGPT'}登录流程。`
       : `已保存：${c.provider}${c.model ? '（模型 ' + c.model + '）' : ''}`;
     renderAccSummary(engine);
+    // 原版订阅也可以选择模型：如果没有选定模型，自动填充内置候选列表
+    if (c.provider === 'official' && !c.model) {
+      autoPickModel(engine);
+    }
     // 已存了第三方服务商与 Key、却没有模型（历史配置/上次没选完）→ 进面板就自动补一个
     if (c.provider !== 'official' && c.apiKey && !c.model) autoPickModel(engine);
   } catch (e) {
@@ -5650,7 +5748,37 @@ async function fetchEngineModels(engine, auto = false) {
     u.status.className = 'sx-note' + (ok === true ? ' ok' : ok === false ? ' err' : '');
     u.status.textContent = text;
   };
-  if (provider === 'official') return;
+  // 原版订阅：走 /api/model/available 获取内置候选列表
+  if (provider === 'official') {
+    const prev = u.model.value;
+    u.model.innerHTML = '';
+    say(auto ? T('modelAutoDetecting') : T('modelFetching'), null);
+    try {
+      const r = await api('/api/model/available', { engine, verify: false });
+      const models = r && r.models ? r.models : [];
+      if (!models.length) throw new Error(T('modelEmptyList'));
+      u.model.appendChild(new Option('自动（交给引擎决定）', ''));
+      models.forEach((m) => {
+        const label = m.label || m.id;
+        const mark = m.verified === true ? ' ✓' : m.verified === false ? ' ✕' : '';
+        u.model.appendChild(new Option(`${label}${mark}`, m.id));
+      });
+      // 优先保留用户原本的选择；否则选中第一个
+      const pick = (prev && models.some(m => m.id === prev) && prev) || models[0]?.id || '';
+      u.model.value = pick;
+      say(
+        auto
+          ? T('modelAutoPicked').replace('{model}', pick || '自动').replace('{n}', models.length)
+          : T('modelFetched').replace('{n}', models.length),
+        true,
+      );
+      renderAccSummary(engine);
+    } catch (e) {
+      u.model.innerHTML = '';
+      say(T('modelFetchFail').replace('{err}', e.message), false);
+    }
+    return;
+  }
   if (!apiKey) { say(T('modelNeedKey'), false); return; }
   if (provider === 'custom' && !u.base.value.trim()) { say(T('modelNeedBase'), false); return; }
   const prev = u.model.value;
@@ -5702,6 +5830,7 @@ async function saveEngineProvider(engine) {
   try {
     await api('/api/engine/config', {
       engine, provider, apiKey: u.key.value.trim(), model,
+      effort: u.effort ? u.effort.value : '',
       baseUrl: provider === 'custom' ? u.base.value.trim() : '',
       modelsUrl: provider === 'custom' ? u.modelsUrl.value.trim() : '',
     });

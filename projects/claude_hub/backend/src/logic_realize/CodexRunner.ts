@@ -14,9 +14,14 @@ export class CodexRunner extends CodexRunnerStruct {
       '--skip-git-repo-check',
       '--dangerously-bypass-approvals-and-sandbox',
     ];
-    // 模型选择：设置里选定则 `-m` 覆盖；为空=自动（沿用 codex config.toml 的 model）
-    const model = (EngineConfig.get().codex.model || '').trim();
+    // 模型与思考强度：设置里选定则覆盖；为空=自动（沿用 codex config.toml）
+    const cfg = EngineConfig.get().codex;
+    const model = (cfg.model || '').trim();
     if (model) common.push('-m', model);
+    // codex 没有 --effort，走 `-c model_reasoning_effort=<level>` 覆盖 config.toml。
+    // 它只认 low/medium/high，故 xhigh/max 按 EFFORT_LEVELS 的映射降级到 high。
+    const effort = EngineConfig.codexEffort();
+    if (effort) common.push('-c', `model_reasoning_effort=${effort}`);
     // 续接：仅当已有 codex 会话 id 且其 rollout 文件真实存在时才 resume；
     // 否则首跑（不 resume），codex 生成新 id 并经 thread.started 回报，再由 _reconcileSessionId 校正。
     if (session.claudeSessionId && CodexStoreHelper.sessionExists(session.claudeSessionId)) {

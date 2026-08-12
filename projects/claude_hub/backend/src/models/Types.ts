@@ -23,9 +23,29 @@ export type Engine = 'claude' | 'codex';
 // xiaomi=小米 MiMo 开放平台，kimi=月之暗面，minimax=MiniMax
 export type EngineProvider = 'official' | 'xiaomi' | 'minimax' | 'kimi' | 'custom';
 
+// 思考强度（effort）。**空字符串 = 自动**（不传参数，由引擎自己决定）。
+// 取值来自 claude CLI 的 `--effort <level>`；codex 走 `-c model_reasoning_effort=<level>`
+// （codex 只认 low/medium/high，xhigh/max 会被降级到 high，见 EFFORT_LEVELS 的 codex 字段）。
+export type EffortLevel = '' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+// 某个服务商自己的一套设置。**每个服务商一槽，互不干扰**——
+// 这是「选原版却看到 MiniMax 模型」那个 bug 的根治：Key/模型/候选缓存都不再跨服务商共用。
+export interface ProviderSlot {
+  apiKey: string;          // 第三方 API Key（official 槽恒为空）
+  model: string;           // 选定模型 id，''=自动
+  effort: EffortLevel;     // 思考强度，''=自动
+  baseUrl?: string;        // 仅 custom
+  modelsUrl?: string;      // 仅 custom；为空时默认 baseUrl + /models
+  models?: ModelOption[];  // 「检测可用模型」结果缓存（供前端下拉）
+  detected?: ModelDetect;  // 「检测当前模型」结果缓存
+}
+
+// 一个引擎的服务商配置。
+// ⚠ 这是**投影后的视图**：`provider` 是当前选中的服务商，其余字段全部取自该服务商自己的槽
+// （EngineConfigStruct.get() 负责投影）。落盘结构见 EnginesFile.slots。
 export interface EngineProviderConfig {
   provider: EngineProvider;
-  apiKey: string; // 第三方 API Key（official 时忽略）
+  apiKey: string; // 第三方 API Key（official 时恒为空）
   // custom 时必填；Claude 填 Anthropic 兼容 Base URL，Codex 填 OpenAI Chat Completions Base URL。
   baseUrl?: string;
   // custom 拉模型的完整 URL；为空时默认 baseUrl + /models。
@@ -33,6 +53,8 @@ export interface EngineProviderConfig {
   // 选定的模型 id。**空字符串 = 自动**（不传 --model / -m，完全由引擎自己决定）。
   // official 时也生效：claude 传 `--model`，codex 传 `-m`。
   model: string;
+  // 思考强度。''=自动（不传）。claude 传 `--effort`，codex 传 `-c model_reasoning_effort=`。
+  effort: EffortLevel;
   models?: ModelOption[];  // 上次「检测可用模型」的结果缓存（供前端下拉）
   detected?: ModelDetect;  // 上次「检测当前模型」的结果缓存
 }
@@ -40,6 +62,18 @@ export interface EngineProviderConfig {
 export interface EnginesConfig {
   claude: EngineProviderConfig;
   codex: EngineProviderConfig;
+}
+
+// 单个引擎的落盘结构：当前选中的服务商 + 每个服务商各自一套设置
+export interface EngineFileEntry {
+  provider: EngineProvider;
+  slots: Partial<Record<EngineProvider, ProviderSlot>>;
+}
+
+// data/engines.json 的落盘结构
+export interface EnginesFile {
+  claude: EngineFileEntry;
+  codex: EngineFileEntry;
 }
 
 // ── 模型选择能力 ──
@@ -68,6 +102,9 @@ export interface EngineModelState {
   engine: Engine;
   provider: EngineProvider;
   selected: string;        // ''=自动
+  effort: EffortLevel;     // ''=自动
+  // 可选的思考强度档位（供前端下拉，避免前端写死一份）
+  efforts: Array<{ id: string; label: string }>;
   options: ModelOption[];
   detected?: ModelDetect;
 }

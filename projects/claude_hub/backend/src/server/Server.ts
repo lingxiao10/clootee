@@ -119,10 +119,17 @@ export class Server {
           provider: req.body.provider,
           apiKey: req.body.apiKey || '',
           model: req.body.model || '',
+          effort: req.body.effort || '',
           baseUrl: req.body.baseUrl || '',
           modelsUrl: req.body.modelsUrl || '',
         }),
       ),
+    );
+    // 某引擎下每个服务商各自保存的设置（供前端换服务商时回显该服务商自己上次的 Key/模型/强度）
+    app.get('/api/engine/slots', (req, res) =>
+      this._wrap(res, 'engine.slots', () => ({
+        slots: EngineConfig.slots(String(req.query.engine || 'claude') as any),
+      })),
     );
     // 实时拉取服务商模型列表；recommended = 在真实返回的 id 里挑的默认模型（前端换服务商时自动选中）
     app.get('/api/engine/models', (req, res) =>
@@ -202,6 +209,12 @@ export class Server {
     app.post('/api/model/select', (req, res) =>
       this._wrap(res, 'model.select', () =>
         ModelManager.setModel(req.body.engine, String(req.body.model || '')),
+      ),
+    );
+    // 选定思考强度（''=自动）。claude 传 --effort，codex 传 -c model_reasoning_effort
+    app.post('/api/model/effort', (req, res) =>
+      this._wrap(res, 'model.effort', () =>
+        ModelManager.setEffort(req.body.engine, String(req.body.effort || '')),
       ),
     );
     // 检测「当前实际生效的模型」（真实探测引擎，不猜）

@@ -18,9 +18,14 @@ export class ClaudeRunner extends ClaudeRunnerStruct {
       '--permission-mode',
       AppConfig.PERMISSION_MODE,
     ];
-    // 模型选择：设置里选定则显式指定；为空=自动（不传 --model，完全由 claude 自己决定）
-    const model = (EngineConfig.get().claude.model || '').trim();
+    // 模型与思考强度：设置里选定则显式指定；为空=自动（不传，完全由 claude 自己决定）。
+    // 注意读的是 EngineConfig.get() 的**投影视图**——它只反映当前服务商自己那一槽，
+    // 所以切回原版绝不会把第三方的模型 id 传给 CLI。
+    const cfg = EngineConfig.get().claude;
+    const model = (cfg.model || '').trim();
     if (model) args.push('--model', model);
+    const effort = (cfg.effort || '').trim();
+    if (effort) args.push('--effort', effort);
     // 追加图表能力提示：让 AI 在合适时输出 <chart> 数据块（前端 ECharts 渲染）
     if (AppConfig.CHART_SYSTEM_PROMPT) {
       args.push('--append-system-prompt', AppConfig.CHART_SYSTEM_PROMPT);
