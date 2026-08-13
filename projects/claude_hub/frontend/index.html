@@ -499,6 +499,25 @@
           <button type="button" id="quickAddGroup" class="qedit-add-group">＋ 添加分组</button>
         </div>
 
+        <!-- ═══ 板块：上下文自动压缩 ═══ -->
+        <div class="sx-pane" id="pane-context" hidden>
+          <div class="sx-note">
+            对话越长，塞给模型的上下文越多。逼近上限时 Claude Code 会把前面的内容<b>压缩成摘要</b>再继续，这样会话能一直聊下去而不报「上下文超长」。<br />
+            压缩发生时，过程区会出现一行 <code>[上下文自动压缩]</code> 提示；也可以随时点输入框旁的工具菜单手动执行 <code>/compact</code>。
+          </div>
+          <label class="sx-lbl">压缩窗口</label>
+          <select class="sx-input" id="autoCompactModeSelect">
+            <option value="auto">自动（推荐：跟随模型自身的上下文窗口）</option>
+            <option value="custom">自定义窗口大小</option>
+          </select>
+          <div id="autoCompactCustomBox" hidden>
+            <label class="sx-lbl">窗口大小（tokens，10 万 ~ 100 万）</label>
+            <input class="sx-input" id="autoCompactTokensInput" type="number" min="100000" max="1000000" step="10000" placeholder="例如 200000" />
+            <div class="sx-note">上下文用到这个量级就触发压缩。<b>调小</b>＝压得更早更频繁、每次请求更省；<b>调大</b>＝保留更多原文，但要求模型确实支持这么长的上下文，否则会直接报错。</div>
+          </div>
+          <div class="sx-note" id="autoCompactNote"></div>
+        </div>
+
         <!-- ═══ 板块：项目模板 ═══ -->
         <div class="sx-pane" id="pane-template" hidden>
           <div class="sx-note">填写一个目录（如 <code>D:\templates</code>），其下<b>每个直接子文件夹</b>都会成为一个可选模板。新建或选择工作目录且缺少 CLAUDE.md/AGENTS.md 时，选中某个模板即把该子文件夹内的文件<b>复制覆盖</b>到项目里。留空=不启用自定义模板。</div>
@@ -851,7 +870,7 @@
   <script src="vendor/cm/mode/sass/sass.min.js"></script>
   <script src="vendor/cm/mode/dart/dart.min.js"></script>
   <script src="vendor/cm/mode/swift/swift.min.js"></script>
-  <script src="trans.js?v=20260812a"></script>
+  <script src="trans.js?v=20260813a"></script>
   <script src="workspace.js?v=20260801i"></script>
   <script src="rootwizard.js?v=20260804a"></script>
   <script src="health.js?v=20260810f"></script>
@@ -867,6 +886,6 @@
   <script src="cat.js?v=20260801q"></script>
   <script src="rabbit.js?v=20260801z"></script>
   <script src="mecha.js?v=20260802a"></script>
-  <script src="app.js?v=20260812a"></script>
+  <script src="app.js?v=20260813a"></script>
 </body>
 </html>

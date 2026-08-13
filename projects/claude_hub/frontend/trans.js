@@ -582,6 +582,17 @@ const DICT = {
   panePromptSet: { en: 'Preset prompt set', zh: '已设提示词' },
   panePromptEmpty: { en: 'No preset prompt', zh: '未设提示词' },
   paneQuickN: { en: '{n} tag group(s)', zh: '{n} 个标签分组' },
+  paneContext: { en: 'Context auto-compact', zh: '上下文自动压缩' },
+  paneContextDesc: {
+    en: 'When a conversation nears the context limit, compact earlier turns into a summary and keep going',
+    zh: '对话接近上下文上限时，把前面的内容压缩成摘要后继续，避免聊着聊着就报超长',
+  },
+  paneContextAuto: { en: 'Auto (model default window)', zh: '自动（跟随模型默认窗口）' },
+  paneContextCustom: { en: 'Custom window: {n} tokens', zh: '自定义窗口：{n} tokens' },
+  paneContextScope: {
+    en: 'This window applies to Claude Code. Codex compacts on its own and has no matching switch. Current default engine: {engine}.',
+    zh: '该窗口设置作用于 Claude Code；Codex 自带压缩机制、没有对应开关。当前默认引擎：{engine}。',
+  },
   paneTemplate: { en: 'Project templates', zh: '项目模板' },
   paneTemplateDesc: {
     en: 'A folder whose subfolders become templates for new working directories',

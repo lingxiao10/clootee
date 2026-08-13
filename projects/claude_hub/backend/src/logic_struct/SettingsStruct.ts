@@ -20,6 +20,19 @@ export interface QuickGroup {
 // 键为 ToolchainStruct 的 ToolId（node/git/claude/codex），缺省即 auto
 export type ToolPrefMap = Record<string, 'auto' | 'system' | 'bundled'>;
 
+// 自动压缩上下文（对应 claude CLI 的 `--autocompact <auto|tokens>`）。
+// 对话逼近上下文上限时，引擎会把前面的内容压成摘要再继续，避免"聊着聊着就报超长"。
+//   auto   = 不传该参数，跟随引擎自身默认（第三方服务商可能另有 CLAUDE_CODE_AUTO_COMPACT_WINDOW）
+//   custom = 显式指定压缩窗口，取值必须在 100k–1M 之间（CLI 自己的硬性限制）
+export type AutoCompactMode = 'auto' | 'custom';
+export interface AutoCompactSetting {
+  mode: AutoCompactMode;
+  tokens: number; // custom 时生效
+}
+export const AUTO_COMPACT_MIN = 100000;
+export const AUTO_COMPACT_MAX = 1000000;
+export const AUTO_COMPACT_DEFAULT_TOKENS = 200000;
+
 export interface AppSettings {
   defaultEngine: Engine;
   allowLan: boolean;      // false=仅 localhost；true=允许局域网(0.0.0.0)访问（需重启生效）
@@ -33,6 +46,8 @@ export interface AppSettings {
   // 模板集合路径：设置后，该目录下每个直接子文件夹都作为一个自定义项目模板，
   // 新建/选择根目录且缺少 CLAUDE.md/AGENTS.md 时可选用，选中即把子文件夹内容复制覆盖到项目里。空=未设置。
   templateCollectionPath: string;
+  // 自动压缩上下文（仅 Claude Code 有对应 CLI 开关；Codex 由其自身机制处理）
+  autoCompact: AutoCompactSetting;
   // 新手引导是否已完成（旧字段，保留兼容；判定是否强制引导请用 setupDone）
   onboarded: boolean;
   // 初始设置是否已完成（语言/主题/引擎/服务商/模型都选好了）。
@@ -64,6 +79,7 @@ export class SettingsStruct {
         : this.defaultQuickGroups(),
       templateCollectionPath:
         raw && typeof raw.templateCollectionPath === 'string' ? raw.templateCollectionPath : '',
+      autoCompact: this._sanitizeAutoCompact(raw && raw.autoCompact),
       platform: process.platform,
       outEndReady: OutEnd.exists(),
       port: AppConfig.PORT,
@@ -97,6 +113,7 @@ export class SettingsStruct {
     if (Array.isArray(patch.quickGroups)) next.quickGroups = this._sanitizeQuickGroups(patch.quickGroups);
     if (typeof patch.templateCollectionPath === 'string')
       next.templateCollectionPath = patch.templateCollectionPath.trim();
+    if (patch.autoCompact) next.autoCompact = this._sanitizeAutoCompact(patch.autoCompact);
     return this._patch(next);
   }
 
@@ -112,9 +129,17 @@ export class SettingsStruct {
       systemPrompt: patch.systemPrompt ?? cur.systemPrompt,
       quickGroups: patch.quickGroups ?? cur.quickGroups,
       templateCollectionPath: patch.templateCollectionPath ?? cur.templateCollectionPath,
+      autoCompact: patch.autoCompact ?? cur.autoCompact,
     };
     this._write(merged);
     return this.get();
+  }
+
+  // 自动压缩要不要显式传给 claude CLI：custom 才传，返回 `--autocompact` 的取值；
+  // auto（默认）返回 ''＝一个参数都不传，完全跟随引擎/服务商自己的设定。
+  static autoCompactArg(): string {
+    const ac = this.get().autoCompact;
+    return ac.mode === 'custom' ? String(ac.tokens) : '';
   }
 
   // ── IO 钩子（realize 实现）──
@@ -131,6 +156,10 @@ export class SettingsStruct {
   // 清洗工具来源偏好：只保留已知工具与合法取值；
   // _legacyPreferBundled 为旧字段 preferBundled 的迁移来源（未显式设置过的工具取它）
   protected static _sanitizeToolPrefs(_raw: unknown, _legacyPreferBundled: boolean): ToolPrefMap {
+    throw new Error('Not implemented');
+  }
+  // 清洗自动压缩设置：模式只认 auto/custom，窗口夹到 100k–1M（CLI 只接受这个区间）
+  protected static _sanitizeAutoCompact(_raw: unknown): AutoCompactSetting {
     throw new Error('Not implemented');
   }
 }

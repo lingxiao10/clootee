@@ -5,7 +5,7 @@ const State = {
   sessions: [],
   sessionId: '',
   session: null,
-  settings: { defaultEngine: 'claude', platform: '', allowLan: false, preferBundled: false, outEndReady: false, systemPrompt: '', templateCollectionPath: '', quickGroups: [], lanUrls: [], port: 0 }, // 默认引擎 + 服务器平台 + 访问/运行时 + 局域网地址（从后端 /api/settings 加载）
+  settings: { defaultEngine: 'claude', platform: '', allowLan: false, preferBundled: false, outEndReady: false, systemPrompt: '', templateCollectionPath: '', quickGroups: [], autoCompact: { mode: 'auto', tokens: 200000 }, lanUrls: [], port: 0 }, // 默认引擎 + 服务器平台 + 访问/运行时 + 局域网地址（从后端 /api/settings 加载）
   running: new Set(),                     // 正在执行任务的会话 id 集合（驱动侧栏"执行中"标识）
   justFinished: new Set(),                // 刚从执行中变为停止、且用户尚未点开查看的会话 id（驱动侧栏"刚执行"醒目标识，区别于状态"已完成"）
   justFinishedSeen: new Set(),            // 在「刚执行完」筛选下被点开（已清除待读）的会话 id：本轮筛选内继续保留在列表中，避免点一个少一个
@@ -4601,6 +4601,7 @@ function bind() {
     renderQuickEditor();
   });
   $('allowLanChk').addEventListener('change', renderLanGuide);
+  $('autoCompactModeSelect').addEventListener('change', syncAutoCompactMode);
   $('lanForgotLink').addEventListener('click', toggleLanPwReset);
   $('lanPwResetBtn').addEventListener('click', resetLanPassword);
   // 添加工作目录引导 / 选择模板：点击遮罩关闭（新建项目表单不设遮罩关闭，避免误丢输入）
@@ -4838,6 +4839,7 @@ async function loadSettings() {
       State.settings.systemPrompt = typeof s.systemPrompt === 'string' ? s.systemPrompt : '';
       State.settings.templateCollectionPath = typeof s.templateCollectionPath === 'string' ? s.templateCollectionPath : '';
       State.settings.quickGroups = Array.isArray(s.quickGroups) ? s.quickGroups : [];
+      if (s.autoCompact) State.settings.autoCompact = s.autoCompact;
       renderQuick();
     }
   } catch { /* 忽略：用默认值 */ }
@@ -4966,6 +4968,20 @@ const SETTINGS_PANES = [
     save: savePromptPane,
   },
   {
+    id: 'context',
+    icon: '🗜️',
+    title: () => T('paneContext'),
+    desc: () => T('paneContextDesc'),
+    summary: () => {
+      const ac = State.settings.autoCompact || {};
+      return ac.mode === 'custom'
+        ? T('paneContextCustom').replace('{n}', formatTokens(ac.tokens))
+        : T('paneContextAuto');
+    },
+    fill: fillContextPane,
+    save: saveContextPane,
+  },
+  {
     id: 'template',
     icon: '📁',
     title: () => T('paneTemplate'),
@@ -5073,6 +5089,7 @@ async function patchSettings(patch) {
     State.settings.templateCollectionPath =
       typeof s.templateCollectionPath === 'string' ? s.templateCollectionPath : '';
     State.settings.quickGroups = Array.isArray(s.quickGroups) ? s.quickGroups : [];
+    if (s.autoCompact) State.settings.autoCompact = s.autoCompact;
     renderQuick();
     return s;
   } catch (e) {
@@ -5239,6 +5256,41 @@ function quickEditTagRow(g, gi, t, ti) {
   });
   row.append(labelIn, promptIn, del);
   return row;
+}
+
+// ── 上下文自动压缩板块 ──
+// 只作用于 Claude Code（Codex 由其自身机制处理，故面板里直接说明，不给它开关）。
+const AUTO_COMPACT_MIN = 100000;
+const AUTO_COMPACT_MAX = 1000000;
+const AUTO_COMPACT_DEFAULT = 200000;
+
+// 20 万 → 「20 万」/「200k」：摘要里给人看的写法，不参与任何计算
+function formatTokens(n) {
+  const v = Number(n) || 0;
+  if (LANG === 'zh') return `${Math.round(v / 10000)} 万`;
+  return `${Math.round(v / 1000)}k`;
+}
+
+function fillContextPane() {
+  const ac = State.settings.autoCompact || {};
+  $('autoCompactModeSelect').value = ac.mode === 'custom' ? 'custom' : 'auto';
+  $('autoCompactTokensInput').value = ac.tokens || AUTO_COMPACT_DEFAULT;
+  syncAutoCompactMode();
+}
+// 切换模式：自定义才显示数字输入；备注行说明当前引擎设置对谁生效
+function syncAutoCompactMode() {
+  const custom = $('autoCompactModeSelect').value === 'custom';
+  $('autoCompactCustomBox').hidden = !custom;
+  const eng = State.settings.defaultEngine === 'codex' ? T('engineCodex') : T('engineClaude');
+  $('autoCompactNote').textContent = T('paneContextScope').replace('{engine}', eng);
+}
+async function saveContextPane() {
+  const mode = $('autoCompactModeSelect').value === 'custom' ? 'custom' : 'auto';
+  const raw = Math.round(Number($('autoCompactTokensInput').value));
+  const tokens = Number.isFinite(raw) && raw > 0
+    ? Math.min(AUTO_COMPACT_MAX, Math.max(AUTO_COMPACT_MIN, raw))
+    : AUTO_COMPACT_DEFAULT;
+  await patchSettings({ autoCompact: { mode, tokens } });
 }
 
 function fillTemplatePane() {

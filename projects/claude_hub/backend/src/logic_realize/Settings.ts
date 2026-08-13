@@ -1,6 +1,16 @@
 // 全局设置（实现）：读写 data/settings.json。
 import * as fs from 'fs';
-import { SettingsStruct, AppSettings, QuickGroup, QuickTag, ToolPrefMap } from '../logic_struct/SettingsStruct';
+import {
+  SettingsStruct,
+  AppSettings,
+  AutoCompactSetting,
+  AUTO_COMPACT_DEFAULT_TOKENS,
+  AUTO_COMPACT_MAX,
+  AUTO_COMPACT_MIN,
+  QuickGroup,
+  QuickTag,
+  ToolPrefMap,
+} from '../logic_struct/SettingsStruct';
 import type { ToolId } from '../logic_struct/ToolchainStruct';
 import { Paths } from '../paths';
 
@@ -60,5 +70,18 @@ export class Settings extends SettingsStruct {
       out[id] = v === 'auto' || v === 'system' || v === 'bundled' ? v : fallback;
     }
     return out;
+  }
+
+  // 清洗自动压缩设置：老配置里没有该字段 → 回落 auto（行为与改动前完全一致，不传 CLI 参数）。
+  // custom 的窗口必须落在 100k–1M：这是 claude CLI 对 `--autocompact` 的硬性限制，
+  // 越界会让进程在启动阶段直接报参数错误，所以在这里夹住而不是原样透传。
+  protected static _sanitizeAutoCompact(raw: unknown): AutoCompactSetting {
+    const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const mode = src.mode === 'custom' ? 'custom' : 'auto';
+    const n = Math.round(Number(src.tokens));
+    const tokens = Number.isFinite(n) && n > 0
+      ? Math.min(AUTO_COMPACT_MAX, Math.max(AUTO_COMPACT_MIN, n))
+      : AUTO_COMPACT_DEFAULT_TOKENS;
+    return { mode, tokens };
   }
 }

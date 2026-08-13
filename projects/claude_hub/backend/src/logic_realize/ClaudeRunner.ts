@@ -5,6 +5,7 @@ import { ClaudeStoreHelper } from '../helper/ClaudeStoreHelper';
 import { EngineConfig } from './EngineConfig';
 import { Logger } from '../helper/Logger';
 import { Session } from '../models/Types';
+import { Settings } from './Settings';
 
 export class ClaudeRunner extends ClaudeRunnerStruct {
   protected static _buildArgs(session: Session, rootPath: string): string[] {
@@ -26,6 +27,10 @@ export class ClaudeRunner extends ClaudeRunnerStruct {
     if (model) args.push('--model', model);
     const effort = (cfg.effort || '').trim();
     if (effort) args.push('--effort', effort);
+    // 自动压缩上下文：只有用户显式选了「自定义窗口」才传。选「自动」时一个参数都不加，
+    // 让 claude 用自己的默认窗口（第三方服务商还会有 CLAUDE_CODE_AUTO_COMPACT_WINDOW，见 EngineConfig）。
+    const autoCompact = Settings.autoCompactArg();
+    if (autoCompact) args.push('--autocompact', autoCompact);
     // 追加图表能力提示：让 AI 在合适时输出 <chart> 数据块（前端 ECharts 渲染）
     if (AppConfig.CHART_SYSTEM_PROMPT) {
       args.push('--append-system-prompt', AppConfig.CHART_SYSTEM_PROMPT);
@@ -68,6 +73,17 @@ export class ClaudeRunner extends ClaudeRunnerStruct {
 
     // init 帧：模型 / 可用工具 / cwd / mcp —— 只进轨迹，不打扰过程面板
     if (evt.type === 'system') {
+      // 例外：压缩分界帧要让用户看见。压缩是"前面的对话被换成摘要"，
+      // 不说一声的话，后面 AI 忘了细节会显得莫名其妙（这也是"感觉没在压缩"的由来）。
+      if (evt.subtype === 'compact_boundary') {
+        const meta = evt.compact_metadata || {};
+        const trigger = meta.trigger === 'manual' ? '手动' : '自动';
+        const pre = Number(meta.pre_tokens);
+        cb.onOutput(
+          `[上下文${trigger}压缩] 前面的对话已压缩成摘要后继续` +
+            (Number.isFinite(pre) && pre > 0 ? `（压缩前约 ${pre} tokens）` : ''),
+        );
+      }
       cb.onEvent?.({
         kind: 'system',
         name: String(evt.subtype || 'system'),
