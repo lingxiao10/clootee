@@ -77,16 +77,19 @@ export class SessionMetaStruct {
     this._write(all);
   }
 
-  static migrate(oldId: string, newId: string): void {
+  // 把 oldId 上的标注并入 newId（收藏/置顶取或、时间取大）并删掉 oldId。
+  // 返回是否真的发生了迁移，供调用方统计/记录。
+  static migrate(oldId: string, newId: string): boolean {
     if (!oldId) throw new Error(`migrate: invalid oldId=${oldId}`);
     if (!newId) throw new Error(`migrate: invalid newId=${newId}`);
-    if (oldId === newId) return;
+    if (oldId === newId) return false;
     const all = this._read();
     const oldEntry = all[oldId];
-    if (!oldEntry) return;
+    if (!oldEntry) return false;
     all[newId] = this._merge(all[newId], oldEntry);
     delete all[oldId];
     this._write(all);
+    return true;
   }
 
   private static _blank(): SessionMetaEntry {

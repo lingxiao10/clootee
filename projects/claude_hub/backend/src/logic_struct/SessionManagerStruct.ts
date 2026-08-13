@@ -3,6 +3,7 @@
 // 列表 = 扫描 jsonl 得到的会话；运行期状态（任务队列 / 暂停）只活在内存里（_live，由 realize 持有），后端重启即清空。
 // 会话 id = `<rootId>:<claude uuid>`；尚未开始的新会话草稿为 `<rootId>:draft-<rand>`（纯内存）。
 import { Ids } from '../helper/Ids';
+import { Logger } from '../helper/Logger';
 import { AppConfig } from '../config/AppConfig';
 import { SessionMeta } from '../logic_realize/SessionMeta';
 import { SessionStatus } from './SessionMetaStruct';
@@ -79,34 +80,52 @@ export class SessionManagerStruct {
   }
 
   // 叠加置顶/状态标记（hub 自己的标注，不属于 jsonl）
+  // 读取键与写入键一致，都走「规范键」；`meta[s.id]` 只作历史遗留（草稿键上的旧标注）兜底。
   private static _withMeta(sessions: Session[]): Session[] {
     const meta = SessionMeta.getAll();
-    return sessions.map((s) => ({
-      ...s,
-      pinned: !!meta[s.id]?.pinned,
-      favorite: !!meta[s.id]?.favorite,
-      status: meta[s.id]?.status || 'active',
-      customTitle: meta[s.id]?.customTitle || '',
-    }));
+    return sessions.map((s) => {
+      const e = meta[this._canonicalKey(s)] || meta[s.id];
+      return {
+        ...s,
+        pinned: !!e?.pinned,
+        favorite: !!e?.favorite,
+        status: e?.status || 'active',
+        customTitle: e?.customTitle || '',
+      };
+    });
+  }
+
+  // 会话 meta 的「规范键」：拿到引擎 uuid 后一律用自然 id（`rootId:uuid`），尚是草稿才用草稿 id。
+  // 同一个会话在首跑前后有两个可用 id（草稿 id 与自然 id，两者都能 getSession 到），
+  // 若标注按调用方传来的 id 直接记账，就会给同一会话写出两条 meta —— 收藏夹遍历 meta 键，
+  // 于是同一个会话出现两遍。故所有读写 meta 的入口统一收敛到这一个键。
+  private static _canonicalKey(s: Session): string {
+    return s.claudeSessionId ? `${s.rootId}:${s.claudeSessionId}` : s.id;
   }
 
   // 置顶 / 取消置顶（最多同时 3 个，超出时淘汰最早置顶的一个）
   static setPinned(id: string, pinned: boolean): Session {
     if (!id) throw new Error(`setPinned: invalid id=${id}`);
-    this.getSession(id); // 校验存在
-    SessionMeta.setPinned(id, pinned);
+    SessionMeta.setPinned(this._canonicalKey(this.getSession(id)), pinned);
     return this.getSession(id);
   }
 
+  // 收藏夹：遍历 meta 里被收藏的键。同一会话的草稿键与自然键可能都留有记录（历史数据），
+  // 故按规范键去重，且优先保留自然 id 那条，避免同一个会话在列表里出现两遍。
   static listFavoriteSessions(): Session[] {
     const meta = SessionMeta.getAll();
+    const ids = Object.keys(meta)
+      .filter((k) => meta[k].favorite)
+      .sort((a, b) => Number(a.includes(':draft-')) - Number(b.includes(':draft-')));
     const out: Session[] = [];
-    for (const id of Object.keys(meta).filter((k) => meta[k].favorite)) {
-      try {
-        out.push(this.getSession(id));
-      } catch {
-        /* Ignore stale favorite metadata for removed or inaccessible sessions. */
-      }
+    const seen = new Set<string>();
+    for (const id of ids) {
+      const s = this._getSessionSafe(id); // 会话已删/根目录不可达 → 跳过这条陈旧收藏
+      if (!s) continue;
+      const key = this._canonicalKey(s);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
     }
     return out.sort((a, b) => {
       if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
@@ -116,23 +135,20 @@ export class SessionManagerStruct {
 
   static setFavorite(id: string, favorite: boolean): Session {
     if (!id) throw new Error(`setFavorite: invalid id=${id}`);
-    this.getSession(id);
-    SessionMeta.setFavorite(id, favorite);
+    SessionMeta.setFavorite(this._canonicalKey(this.getSession(id)), favorite);
     return this.getSession(id);
   }
 
   // 手动标记状态：活跃 / 待测试 / 已完成，任意状态可直接互相切换
   static setStatus(id: string, status: SessionStatus): Session {
     if (!id) throw new Error(`setStatus: invalid id=${id}`);
-    this.getSession(id); // 校验存在
-    SessionMeta.setStatus(id, status);
+    SessionMeta.setStatus(this._canonicalKey(this.getSession(id)), status);
     return this.getSession(id);
   }
 
   static setTitle(id: string, title: string): Session {
     if (!id) throw new Error(`setTitle: invalid id=${id}`);
-    this.getSession(id);
-    SessionMeta.setTitle(id, title);
+    SessionMeta.setTitle(this._canonicalKey(this.getSession(id)), title);
     return this.getSession(id);
   }
 
@@ -217,9 +233,11 @@ export class SessionManagerStruct {
   // 删除会话：删除其对应的 claude jsonl（真正生效，不会再以"原生会话"冒出来）并清掉内存运行期。
   static removeSession(id: string): void {
     if (!id) throw new Error(`removeSession: invalid id=${id}`);
+    const s = this._getSessionSafe(id); // 必须先取：删完 jsonl / 运行期后就推不出规范键了
     this._removeJsonl(id);
     this._del(id);
     SessionMeta.remove(id);
+    if (s) SessionMeta.remove(this._canonicalKey(s)); // 顺带清掉另一个 id 上的历史标注
   }
 
   // 批量删除会话：逐个删除，单个失败不影响其余（迭代与容错细节交 realize）
@@ -247,7 +265,21 @@ export class SessionManagerStruct {
       this._put(session);
       restored.push(session);
     }
+    this._normalizeMeta(restored);
     return restored;
+  }
+
+  // 历史数据修复：把还记在草稿 id 上的标注并回规范键（migrate 自带合并：收藏/置顶取或、时间取大）。
+  // 这些草稿键是「_reconcileSessionId 已把 meta 迁到自然 id，之后又在列表里按草稿 id 写了一次」留下的，
+  // 不并掉的话收藏夹里同一会话会出现两条。
+  private static _normalizeMeta(sessions: Session[]): void {
+    let merged = 0;
+    for (const s of sessions) {
+      const key = this._canonicalKey(s);
+      if (key === s.id) continue;
+      if (SessionMeta.migrate(s.id, key)) merged++;
+    }
+    if (merged) Logger.info('SessionManager', `_normalizeMeta: 合并重复会话标注 ${merged} 条`);
   }
 
   // 取会话中的某个任务
@@ -265,6 +297,10 @@ export class SessionManagerStruct {
   // _live 以会话最初 id（草稿 id / 首个 uuid）为键，reconcile 换 uuid 后键与自然 id 分叉，
   // 精确 _get(自然id) 会 miss；收藏夹/单会话读取按自然 id 索取，故需此兜底拿到运行期任务。
   protected static _getLiveByNaturalId(_id: string): Session | null {
+    throw new Error('Not implemented');
+  }
+  // getSession 的安全版：会话已删 / 根目录不可达时返回 null 而非抛错（收藏夹遍历、删除取规范键用）
+  protected static _getSessionSafe(_id: string): Session | null {
     throw new Error('Not implemented');
   }
   protected static _put(_session: Session): void {

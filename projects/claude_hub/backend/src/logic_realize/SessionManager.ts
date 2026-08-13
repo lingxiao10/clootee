@@ -24,6 +24,13 @@ export class SessionManager extends SessionManagerStruct {
     }
     return null;
   }
+  protected static _getSessionSafe(id: string): Session | null {
+    try {
+      return this.getSession(id);
+    } catch {
+      return null;
+    }
+  }
   protected static _put(session: Session): void {
     this._live.set(session.id, session);
     this._persist();
