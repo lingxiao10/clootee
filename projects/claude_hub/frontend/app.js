@@ -7,6 +7,7 @@ const State = {
   session: null,
   settings: { defaultEngine: 'claude', platform: '', allowLan: false, preferBundled: false, outEndReady: false, systemPrompt: '', templateCollectionPath: '', quickGroups: [], autoCompact: { mode: 'auto', tokens: 200000 }, lanUrls: [], port: 0 }, // 默认引擎 + 服务器平台 + 访问/运行时 + 局域网地址（从后端 /api/settings 加载）
   running: new Set(),                     // 正在执行任务的会话 id 集合（驱动侧栏"执行中"标识）
+  runningTasks: new Map(),                // 会话 id → 该会话正在跑的任务 id 集合；running 即它的非空键集（排队新消息不会误清执行中）
   justFinished: new Set(),                // 刚从执行中变为停止、且用户尚未点开查看的会话 id（驱动侧栏"刚执行"醒目标识，区别于状态"已完成"）
   justFinishedSeen: new Set(),            // 在「刚执行完」筛选下被点开（已清除待读）的会话 id：本轮筛选内继续保留在列表中，避免点一个少一个
   tab: 'active',                          // 会话列表筛选：active / testing / completed / all
@@ -953,7 +954,7 @@ async function loadSessions() {
   const list = $('sessionList');
   if (!isWorkspace() && State.favoritesOnly) {
     State.sessions = await loadFavoriteSessions();
-    State.running = new Set(State.sessions.filter(sessionHasRunning).map((s) => s.id));
+    rebuildRunning();
     renderSessions();
     if (!State.sessions.find((s) => s.id === State.sessionId)) {
       await selectSession(State.sessions[0]?.id || null);
@@ -963,7 +964,7 @@ async function loadSessions() {
   if (isWorkspace()) {
     // 工作台模式：跨全部目录合并会话，不依赖左上角根目录选择
     State.sessions = await api('/api/session/list-all');
-    State.running = new Set(State.sessions.filter(sessionHasRunning).map((s) => s.id));
+    rebuildRunning();
     renderSessions();
     if (!State.sessions.find((s) => s.id === State.sessionId)) {
       selectSession(State.sessions[0]?.id || null);
@@ -978,7 +979,7 @@ async function loadSessions() {
   }
   State.sessions = await api('/api/session/list?rootId=' + encodeURIComponent(State.rootId));
   // 依据各会话任务队列重建"执行中"集合（WS 事件后续增量更新）
-  State.running = new Set(State.sessions.filter(sessionHasRunning).map((s) => s.id));
+  rebuildRunning();
   renderSessions();
   if (!State.sessions.find((s) => s.id === State.sessionId)) {
     selectSession(State.sessions[0]?.id || null);
@@ -1043,27 +1044,46 @@ function matchSnippet(s, q) {
   return null;
 }
 
-// 会话任务里是否有正在执行的
-function sessionHasRunning(s) {
-  return (s.tasks || []).some((t) => t.status === 'running');
+// 依据会话列表（后端为准）重建"执行中"集合与每会话的运行任务 id 集，后续由 WS 任务事件增量更新
+function rebuildRunning() {
+  State.runningTasks = new Map();
+  for (const s of State.sessions) {
+    const ids = (s.tasks || []).filter((t) => t.status === 'running').map((t) => t.id);
+    if (ids.length) State.runningTasks.set(s.id, new Set(ids));
+  }
+  State.running = new Set(State.runningTasks.keys());
 }
-// 依据一条任务事件更新"执行中"集合（running→加入；结束→移除）
+// 依据一条任务事件更新"执行中"集合（running→加入；该任务结束→移除）
+// ⚠ 必须按任务 id 记账：一个会话在跑的同时还能追加排队消息，而排队会广播 status='pending' 的任务事件。
+//   早期实现"只要来了非 running 事件就清掉执行中"，导致每追加一条消息，侧栏"执行中"就消失（还会误标"刚执行"）。
 // 结束瞬间若用户当前未打开该会话，标记 justFinished（侧栏"刚执行"），待用户点开该会话后清除
 function updateRunningFromTask(sessionId, task) {
   if (!sessionId || !task) return;
   const before = State.running.has(sessionId);
-  let reordered = false;
+  let ids = State.runningTasks.get(sessionId);
   if (task.status === 'running') {
+    if (!ids) State.runningTasks.set(sessionId, (ids = new Set()));
+    ids.add(task.id);
+  } else if (ids) {
+    // 只有"这条正在跑的任务"结束才算跑完；pending/held 等其它任务的事件与执行中标识无关
+    ids.delete(task.id);
+    if (ids.size === 0) State.runningTasks.delete(sessionId);
+  }
+  const after = State.runningTasks.has(sessionId);
+  let reordered = false;
+  if (after) {
     State.running.add(sessionId);
     State.justFinished.delete(sessionId);
-    // 开始执行即把该会话的更新时间顶到最新，让它在列表里浮到最上面
-    // （与后端 _markRunning 落库的 updatedAt 保持一致；否则前端缓存的旧时间不会重排）
-    reordered = bumpSessionUpdatedAt(sessionId, task.startedAt || Date.now());
   } else {
     State.running.delete(sessionId);
     if (before && sessionId !== State.sessionId) State.justFinished.add(sessionId);
   }
-  if (reordered || State.running.has(sessionId) !== before) renderSessions();
+  if (task.status === 'running') {
+    // 开始执行即把该会话的更新时间顶到最新，让它在列表里浮到最上面
+    // （与后端 _markRunning 落库的 updatedAt 保持一致；否则前端缓存的旧时间不会重排）
+    reordered = bumpSessionUpdatedAt(sessionId, task.startedAt || Date.now());
+  }
+  if (reordered || after !== before) renderSessions();
 }
 
 // 把某会话的 updatedAt 顶到给定时间并就地重排会话列表（含收藏夹列表）。返回是否命中该会话。
@@ -1098,7 +1118,7 @@ async function refreshFavoriteSessions(renderAfter = false) {
     await loadFavoriteSessions();
     if (State.favoritesOnly) {
       State.sessions = State.favoriteSessions;
-      State.running = new Set(State.sessions.filter(sessionHasRunning).map((s) => s.id));
+      rebuildRunning();
       if (renderAfter) renderSessions();
     }
   } catch {
@@ -1196,7 +1216,7 @@ async function toggleFavorites() {
   FavDir.rootId = '';
   if (State.favoritesOnly) {
     State.sessions = await loadFavoriteSessions();
-    State.running = new Set(State.sessions.filter(sessionHasRunning).map((s) => s.id));
+    rebuildRunning();
     renderSessions();
     if (!State.sessions.find((s) => s.id === State.sessionId)) {
       await selectSession(State.sessions[0]?.id || null);
