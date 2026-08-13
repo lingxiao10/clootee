@@ -16,7 +16,6 @@ export interface CommandSpec {
 export class CommandsConfig {
   private static readonly LIST: CommandSpec[] = [
     { id: 'usage', slash: '/usage', needsSession: false, timeoutMs: AppConfig.COMMAND_TIMEOUT_MS },
-    { id: 'compact', slash: '/compact', needsSession: true, timeoutMs: AppConfig.COMMAND_COMPACT_TIMEOUT_MS },
   ];
 
   // 全部可用命令（前端渲染菜单用）

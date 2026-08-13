@@ -2743,7 +2743,6 @@ function pickSlash(i) {
 // 把真实输出展示在结果弹窗里——真的看到反馈。每个命令都带用途解释。
 const CMD_ITEMS = [
   { id: 'usage', slash: '/usage' },
-  { id: 'compact', slash: '/compact' },
 ];
 const CmdMenu = { open: false, running: false };
 
@@ -2789,8 +2788,6 @@ async function runCommand(id) {
     const data = await api('/api/command/run', { id: State.sessionId, cmd: id });
     const out = data && data.output ? data.output : T('cmdNoOutput');
     openCmdResult(item, out, false);
-    // /compact 改变了对话上下文，刷新会话视图让最新状态可见
-    if (id === 'compact') { try { await selectSession(State.sessionId); } catch { /* 忽略刷新失败 */ } }
   } catch (e) {
     openCmdResult(item, T('cmdFailed') + '\n\n' + (e && e.message ? e.message : String(e)), false);
   } finally {
