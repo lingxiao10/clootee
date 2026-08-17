@@ -51,6 +51,9 @@ export interface ProviderMeta {
   // ⚠ 这不是兜底模型列表：只用于在服务商 API **真实返回**的 id 里排序挑一个，
   //   API 返回空仍然照旧报错（见 listModels），绝不拿写死的名字去请求。
   preferModels?: string[];
+  // 「订阅制 Key」走独立域名、与按量计费 Key 互不通用的服务商填这里。
+  // Key 前缀命中时，上面三个 base 全部换成这里的（见 _bases）。
+  subscription?: { keyPrefix: string; anthropicBase: string; chatBase: string; modelsUrl: string };
 }
 
 // 由本工具托管的 claude 环境变量：既注入 process.env，也写进 ~/.claude/settings.json 的 env 段。
@@ -87,23 +90,47 @@ export const PROVIDERS: Record<Exclude<EngineProvider, 'official' | 'custom'>, P
     preferModels: ['MiniMax-M3', 'MiniMax-M2'],
   },
   xiaomi: {
+    // 按量计费 Key（sk-）走 api 域名
     anthropicBase: 'https://api.xiaomimimo.com/anthropic',
     chatBase: 'https://api.xiaomimimo.com/v1',
     modelsUrl: 'https://api.xiaomimimo.com/v1/models',
+    // 订阅制 Token Plan 的 Key（tp-）是**另一套域名**，两者互不通用：
+    // 拿 tp- Key 打 api.xiaomimimo.com 会直接鉴权失败。国内集群用 -cn
+    // （官方还有 -sgp / -ams 两个海外集群，要用的人走「自定义服务商」填）。
+    subscription: {
+      keyPrefix: 'tp-',
+      anthropicBase: 'https://token-plan-cn.xiaomimimo.com/anthropic',
+      chatBase: 'https://token-plan-cn.xiaomimimo.com/v1',
+      modelsUrl: 'https://token-plan-cn.xiaomimimo.com/v1/models',
+    },
     label: '小米 MiMo',
     signupUrl: 'https://platform.xiaomimimo.com',
     docsUrl: 'https://platform.xiaomimimo.com/docs',
-    note: '小米自研模型，国内直连',
+    note: '小米自研模型，国内直连；按量计费 Key（sk-）与订阅 Token Plan Key（tp-）都支持，粘进来自动识别',
   },
   kimi: {
     anthropicBase: 'https://api.moonshot.cn/anthropic',
     chatBase: 'https://api.moonshot.cn/v1',
     modelsUrl: 'https://api.moonshot.cn/v1/models',
-    label: 'Kimi（月之暗面）',
-    signupUrl: 'https://platform.moonshot.cn/console/api-keys',
-    docsUrl: 'https://platform.moonshot.cn/docs',
-    note: '国内直连，长上下文见长，需充值后使用',
+    label: 'Kimi 开放平台（按量计费）',
+    // platform.moonshot.cn 已 301 到 platform.kimi.com，直接写新地址免得多跳一次
+    signupUrl: 'https://platform.kimi.com/console/api-keys',
+    docsUrl: 'https://platform.kimi.com/docs',
+    note: '国内直连，长上下文见长，按量计费需先充值；Key 在开放平台控制台创建',
     extraEnv: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '1048576', CLAUDE_CODE_EFFORT_LEVEL: 'max' },
+  },
+  // Kimi Code 是月之暗面的**包月订阅**产品，和上面的开放平台按量计费是两套东西：
+  // 端点不同（api.kimi.com/coding）、Key 不同（kimi.com/code 控制台单独创建）、模型名也不同
+  // （kimi-for-coding / k3 …）。官方明确两者 Key 不通用，混用报 401 invalid_authentication_error。
+  // ⚠ 不能像小米那样按 Key 前缀自动区分——两边都是 sk- 开头，所以只能单列一个服务商让用户自己选。
+  kimicode: {
+    anthropicBase: 'https://api.kimi.com/coding',
+    chatBase: 'https://api.kimi.com/coding/v1',
+    modelsUrl: 'https://api.kimi.com/coding/v1/models',
+    label: 'Kimi Code（包月订阅）',
+    signupUrl: 'https://www.kimi.com/code/console',
+    docsUrl: 'https://www.kimi.com/code/docs/',
+    note: '已买 Kimi Code 月卡的选这个；Key 要在 kimi.com/code 控制台单独建，和开放平台的 Key 不通用（都是 sk- 开头，别拿错）',
   },
 };
 
@@ -253,11 +280,23 @@ export class EngineConfigStruct {
     this._writeFile(file);
   }
 
+  // 解析某服务商在**这把 Key** 下实际要用的三个 base。
+  // 端点不能只看服务商：小米 MiMo 的订阅 Key（tp-）与按量 Key（sk-）走不同域名且互不通用，
+  // 用错域名会直接鉴权失败。official / custom 不走内置端点表 → 返回 null 由调用方处理。
+  private static _bases(provider: EngineProvider, apiKey: string): ProviderMeta | null {
+    if (provider === 'official' || provider === 'custom') return null;
+    const meta = PROVIDERS[provider];
+    if (!meta) return null;
+    const sub = meta.subscription;
+    if (!sub || !String(apiKey || '').trim().startsWith(sub.keyPrefix)) return meta;
+    return { ...meta, anthropicBase: sub.anthropicBase, chatBase: sub.chatBase, modelsUrl: sub.modelsUrl };
+  }
+
   // 当前 claude 服务商对应的托管环境变量（official / 未填 Key → 空对象＝全部清除）
   static claudeEnv(): Record<string, string> {
     const cfg = this.get().claude;
     if (cfg.provider === 'official') return {};
-    const meta = cfg.provider === 'custom' ? null : PROVIDERS[cfg.provider];
+    const meta = this._bases(cfg.provider, cfg.apiKey);
     const baseUrl = cfg.provider === 'custom' ? cfg.baseUrl : meta?.anthropicBase;
     if (!baseUrl || !cfg.apiKey) return {};
     const env: Record<string, string> = {
@@ -292,7 +331,7 @@ export class EngineConfigStruct {
   static codexUpstream(): { baseUrl: string; apiKey: string; model: string; label: string } {
     const cfg = this.get().codex;
     if (cfg.provider === 'official') throw new Error('Codex 当前使用原版 ChatGPT，无第三方上游');
-    const meta = cfg.provider === 'custom' ? null : PROVIDERS[cfg.provider];
+    const meta = this._bases(cfg.provider, cfg.apiKey);
     const baseUrl = cfg.provider === 'custom' ? cfg.baseUrl || '' : meta?.chatBase || '';
     if (!baseUrl || !cfg.apiKey || !cfg.model)
       throw new Error('Codex 第三方服务商缺少 Base URL、API Key 或模型');
@@ -329,7 +368,8 @@ export class EngineConfigStruct {
   ): Promise<string[]> {
     if (provider === 'official')
       throw new Error('listModels: official（原版订阅）无需选择模型');
-    const meta = provider === 'custom' ? null : PROVIDERS[provider];
+    // 端点随 Key 走（订阅 Key 与按量 Key 不同域名），所以要把 apiKey 一起交给 _bases
+    const meta = this._bases(provider, apiKey);
     if (provider !== 'custom' && !meta) throw new Error(`listModels: invalid provider=${provider}`);
     if (!apiKey || !apiKey.trim()) throw new Error('listModels: 需要填写 API Key 才能拉取模型列表');
     if (provider === 'custom') this._assertUrl(baseUrl, 'Base URL');

@@ -116,6 +116,7 @@ function applyText() {
   document.title = `${T('title')} — ${T('tagline')}`;
   $('langBtn').textContent = T('lang');
   $('guideBtn').title = T('guideBtn');
+  if (!$('guideMenu').hidden) renderGuideMenu();
   if (!$('guideOverlay').hidden) renderGuide();
   $('rootLabel').textContent = T('root');
   $('addRootBtn').textContent = '＋';
@@ -231,6 +232,7 @@ function applyText() {
   // 引擎下拉选项（主区 + 设置弹窗）
   fillEngineOptions($('engineSelect'));
   fillEngineOptions($('defaultEngineSelect'));
+  applyEnginePaneText();
   updateQueueToggle((State.session?.tasks || []).length);
   refreshPauseBtn();
   refreshEngineControl();
@@ -324,6 +326,29 @@ function toggleThemePanel() {
 function closeThemePanel() {
   const p = $('themePanel');
   if (p && !p.hidden) p.hidden = true;
+}
+
+// ── 教程入口菜单：📖 弹出两个选项（快速上手指南 / 小白教程） ──
+function renderGuideMenu() {
+  $('guideMenuTitle').textContent = T('guideMenuTitle');
+  $('gmQuickT').textContent = T('guideMenuQuickT');
+  $('gmQuickD').textContent = T('guideMenuQuickD');
+  $('gmLearnT').textContent = T('guideMenuLearnT');
+  $('gmLearnD').textContent = T('guideMenuLearnD');
+}
+function toggleGuideMenu() {
+  const p = $('guideMenu');
+  if (p.hidden) { renderGuideMenu(); p.hidden = false; }
+  else p.hidden = true;
+}
+function closeGuideMenu() {
+  const p = $('guideMenu');
+  if (p && !p.hidden) p.hidden = true;
+}
+// 小白教程是独立页面，另开标签页，不打断当前会话
+function openLearnCourse() {
+  closeGuideMenu();
+  window.open('learn.html', '_blank', 'noopener');
 }
 
 // ── 使用指南 ──
@@ -4533,7 +4558,12 @@ function renderSheets(sheets) {
 // ── 绑定 ──
 function bind() {
   $('langBtn').addEventListener('click', toggleLang);
-  $('guideBtn').addEventListener('click', openGuide);
+  $('guideBtn').addEventListener('click', (e) => { e.stopPropagation(); toggleGuideMenu(); });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#guideMenu') && e.target.id !== 'guideBtn') closeGuideMenu();
+  });
+  $('gmQuick').addEventListener('click', () => { closeGuideMenu(); openGuide(); });
+  $('gmLearn').addEventListener('click', openLearnCourse);
   $('guideClose').addEventListener('click', closeGuide);
   $('guideGotIt').addEventListener('click', closeGuide);
   $('guideOverlay').addEventListener('click', (e) => { if (e.target.id === 'guideOverlay') closeGuide(); });
@@ -4657,6 +4687,11 @@ function bind() {
   // 同一个下拉（claudeModelSelect/codexModelSelect）与「服务商」区共用，服务商变了会被清空重选
   $('claudeModelSelect').addEventListener('change', () => onModelSelect('claude'));
   $('codexModelSelect').addEventListener('change', () => onModelSelect('codex'));
+  // 自定义服务商用的手填输入框：失焦/回车即落盘，和下拉行为一致
+  $('claudeModelInput').addEventListener('change', () => onModelSelect('claude'));
+  $('codexModelInput').addEventListener('change', () => onModelSelect('codex'));
+  $('claudeModelInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onModelSelect('claude'); });
+  $('codexModelInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onModelSelect('codex'); });
   // 思考强度：两个引擎各一个下拉，''=自动
   $('claudeEffortSelect').addEventListener('change', () => onEffortSelect('claude'));
   $('codexEffortSelect').addEventListener('change', () => onEffortSelect('codex'));
@@ -5117,11 +5152,47 @@ async function patchSettings(patch) {
 
 // ── 各板块的 fill / save ──
 // 引擎板块：默认引擎 + 两个引擎的服务商/模型折叠块（进入时才拉取，避免主设置一开就打一堆请求）
+// 引擎板块的静态文案：标签、服务商下拉选项、按钮、占位符。
+// 首屏与「切语言」都经 applyText 走这里，保证界面只出现当前语言。
+function applyEnginePaneText() {
+  for (const engine of ['claude', 'codex']) {
+    const cap = engine === 'claude' ? 'Claude' : 'Codex';
+    const u = providerUi(engine);
+    $(`${engine}ProviderLbl`).textContent = T('engProviderLabel');
+    // 服务商下拉的选项由 HTML 定义（顺序/值），这里只按 value 改文案
+    for (const o of u.select.options) o.textContent = providerOptionText(engine, o.value);
+    $(`${engine}BaseUrlLbl`).textContent = T(engine === 'claude' ? 'engBaseUrlClaude' : 'engBaseUrlCodex');
+    u.base.placeholder = T(engine === 'claude' ? 'engBaseUrlPhClaude' : 'engBaseUrlPhCodex');
+    $(`${engine}ModelsUrlLbl`).textContent = T('engModelsUrlLabel');
+    u.modelsUrl.placeholder = T('engModelsUrlPh');
+    $(`${engine}ApiKeyLbl`).textContent = T('engApiKeyLabel');
+    u.key.placeholder = T('engApiKeyPh');
+    $(`${engine}ModelLbl`).textContent = T('engModelLabel');
+    u.modelInput.placeholder = T('engModelPh');
+    u.modelHint.textContent = T('engModelHintCustom');
+    $(`${engine}EffortLbl`).textContent = T('engEffortLabel');
+    $(`${engine}EffortNote`).textContent = T(engine === 'claude' ? 'engEffortNoteClaude' : 'engEffortNoteCodex');
+    $(`${engine}AdvLabel`).textContent = T('advOptions');
+    $(`${engine}ModelsBtn`).textContent = T('engRefetchModels');
+    $(`mdl${cap}DetectBtn`).textContent = T('engDetectCurrent');
+    $(`mdl${cap}ListBtn`).textContent = T('engDetectAvailable');
+    $(`${engine}SaveBtn`).textContent = T(engine === 'claude' ? 'engSaveClaude' : 'engSaveCodex');
+    syncModelProviderTag(engine);
+  }
+  // 「逐个真实验证」只有 claude 有（原版订阅没有模型列表接口，只能挨个试）
+  $('mdlClaudeVerifyTitle').textContent = T('engVerifyTitle');
+  $('mdlClaudeVerifyDesc').textContent = T('engVerifyDesc');
+}
+// 服务商下拉的选项文字：原版按引擎分两种说法，MiniMax 在 claude 侧带「推荐」后缀
+function providerOptionText(engine, id) {
+  if (id === 'official') return T(engine === 'claude' ? 'pvOfficialClaude' : 'pvOfficialCodex');
+  if (id === 'minimax' && engine === 'claude') return T('pvMinimax') + T('pvMinimaxTag');
+  return providerLabel(id);
+}
+
 function fillEnginePane() {
   $('defaultEngineSelect').value = State.settings.defaultEngine;
   $('defaultEngineNote').textContent = T('defaultEngineNote');
-  $('claudeAdvLabel').textContent = T('advOptions');
-  $('codexAdvLabel').textContent = T('advOptions');
   setAdvOpen('claude', false);
   setAdvOpen('codex', false);
   // 默认展开当前默认引擎那一块，另一块收起
@@ -5491,12 +5562,96 @@ function toggleAcc(engine) {
 // 折叠时在标题行右侧显示一眼可见的当前状态：服务商 · 模型
 function renderAccSummary(engine) {
   const u = providerUi(engine);
-  const opt = u.select.options[u.select.selectedIndex];
-  const providerLabel = opt ? opt.text.split(/[（(]/)[0].trim() : u.select.value;
-  const modelLabel = u.model.value || '自动';
+  // 摘要要短：括号里的补充说明（如「按量计费」）去掉，只留服务商名
+  const pv = providerLabel(u.select.value).split(/[（(]/)[0].trim();
+  const modelLabel = modelValue(engine) || T('effAutoShort');
   // 强度非自动时才进摘要（避免每个引擎都挂一个「自动」显得啰嗦）
   const effort = u.effort ? u.effort.value : '';
-  accUi(engine).sum.textContent = `${providerLabel} · ${modelLabel}${effort ? ' · ' + effort : ''}`;
+  accUi(engine).sum.textContent = `${pv} · ${modelLabel}${effort ? ' · ' + effort : ''}`;
+}
+
+// ── 服务商 / 模型 / 强度的展示名（唯一来源：trans.js，后端只下发 id）──
+// 后端新增了前端还没加文案的 id 时，一律回落到 id 本身，绝不显示空白。
+const PROVIDER_LABEL_KEY = {
+  official: 'pvOfficial', minimax: 'pvMinimax', xiaomi: 'pvXiaomi',
+  kimi: 'pvKimi', kimicode: 'pvKimicode', custom: 'pvCustom',
+};
+const PROVIDER_NOTE_KEY = {
+  minimax: 'pvNoteMinimax', xiaomi: 'pvNoteXiaomi', kimi: 'pvNoteKimi', kimicode: 'pvNoteKimicode',
+};
+const EFFORT_LABEL_KEY = {
+  low: 'effLow', medium: 'effMedium', high: 'effHigh', xhigh: 'effXhigh', max: 'effMax',
+};
+const MODEL_ALIAS_KEY = {
+  opus: 'mdlAliasOpus', sonnet: 'mdlAliasSonnet', haiku: 'mdlAliasHaiku', fable: 'mdlAliasFable',
+};
+// 「检测当前模型」的来源/失败原因：后端下发稳定编码，认不出的原样展示（多为引擎或网络的原始报错）
+const DETECT_SRC_KEY = {
+  'claude-init': 'srcClaudeInit', 'codex-toml': 'srcCodexToml',
+  'codex-catalog': 'srcCodexCatalog', codex: 'srcCodex',
+};
+const DETECT_ERR_KEY = {
+  'init-no-model': 'errInitNoModel',
+  'codex-catalog-empty': 'errCodexCatalogEmpty',
+  'probe-timeout': 'errProbeTimeout',
+};
+
+function providerLabel(id, fallback) {
+  return PROVIDER_LABEL_KEY[id] ? T(PROVIDER_LABEL_KEY[id]) : (fallback || id);
+}
+function providerNote(id, fallback) {
+  return PROVIDER_NOTE_KEY[id] ? T(PROVIDER_NOTE_KEY[id]) : (fallback || '');
+}
+function effortLabel(id, fallback) {
+  return EFFORT_LABEL_KEY[id] ? T(EFFORT_LABEL_KEY[id]) : (fallback || id);
+}
+function detectSourceLabel(src) {
+  return DETECT_SRC_KEY[src] ? T(DETECT_SRC_KEY[src]) : (src || '');
+}
+function detectErrorLabel(err) {
+  if (!err) return T('mdlUnknownReason');
+  return DETECT_ERR_KEY[err] ? T(DETECT_ERR_KEY[err]) : err;
+}
+// 一条模型候选的展示文本：展示名 + 验证结果 + 备注
+function modelOptionText(o) {
+  const base = o.source === 'detected'
+    ? `${o.id}${T('mdlSuffixDetected')}`
+    : MODEL_ALIAS_KEY[o.id] ? T(MODEL_ALIAS_KEY[o.id]) : (o.label || o.id);
+  const mark = o.verified === true ? ' ✓' : o.verified === false ? ' ✕' : '';
+  // 备注多为验证失败原因：固定原因有编码可翻译，其余（引擎原始报错）原样带出
+  return `${base}${mark}${o.note ? ` · ${detectErrorLabel(o.note)}` : ''}`;
+}
+
+// ── 模型这一栏：预设服务商用下拉；自定义服务商可直接手填 ──
+// 自定义端点的模型列表未必拉得到（很多兼容网关没有 /models），所以那种情况必须允许自己写模型 id；
+// 拉到的候选转成 datalist，输入时作为提示出现，两种方式共用同一个「当前模型」值。
+function modelIsFree(engine) {
+  return providerUi(engine).select.value === 'custom';
+}
+function modelValue(engine) {
+  const u = providerUi(engine);
+  return modelIsFree(engine) ? u.modelInput.value.trim() : u.model.value;
+}
+function setModelValue(engine, model) {
+  const u = providerUi(engine);
+  u.model.value = model || '';
+  u.modelInput.value = model || '';
+}
+function clearModelChoices(engine) {
+  const u = providerUi(engine);
+  u.model.innerHTML = '';
+  u.modelList.innerHTML = '';
+}
+// opts 为 [{id,label,source,verified,note}]；withAuto=true 时首项是「自动」（值为空）
+function fillModelChoices(engine, opts, withAuto) {
+  const u = providerUi(engine);
+  clearModelChoices(engine);
+  if (withAuto) u.model.appendChild(new Option(T('effAuto'), ''));
+  for (const o of opts) {
+    const text = modelOptionText(o);
+    u.model.appendChild(new Option(text, o.id));
+    u.modelList.appendChild(new Option(text, o.id));
+  }
 }
 
 // ── 模型选择（claude / codex 各自一套；''=自动）──
@@ -5508,8 +5663,9 @@ async function loadModelState() {
     renderModelSection('codex', st && st.codex);
   } catch (e) {
     // 后端未重启时该端点会 404，降级为不可用提示，不影响其他设置
-    setModelStatus('claude', `无法读取模型状态：${e.message}`, false);
-    setModelStatus('codex', `无法读取模型状态：${e.message}`, false);
+    const msg = T('mdlStateFail').replace('{err}', e.message);
+    setModelStatus('claude', msg, false);
+    setModelStatus('codex', msg, false);
   }
 }
 
@@ -5520,29 +5676,23 @@ function renderModelSection(engine, s) {
   if (!s) return;
   const cap = engine === 'claude' ? 'Claude' : 'Codex';
   const sel = providerUi(engine).model;
-  $(`mdl${cap}Provider`).textContent = s.provider === 'official' ? '原版' : s.provider;
+  $(`mdl${cap}Provider`).textContent = providerLabel(s.provider);
   const opts = Array.isArray(s.options) ? s.options : [];
-  sel.innerHTML = '';
-  sel.appendChild(new Option('自动（交给引擎决定）', ''));
-  for (const o of opts) {
-    // 标注来源与验证结果，让用户知道这条候选有多可信
-    const mark = o.verified === true ? ' ✓' : o.verified === false ? ' ✕' : '';
-    const label = `${o.label || o.id}${mark}${o.note ? ` · ${o.note}` : ''}`;
-    sel.appendChild(new Option(label, o.id));
-  }
+  // 标注来源与验证结果，让用户知道这条候选有多可信
+  fillModelChoices(engine, opts, true);
   // 选定值不在候选里（例如刚换服务商）时补一条，避免显示错位
   if (s.selected && !opts.some((o) => o.id === s.selected)) {
-    sel.appendChild(new Option(`${s.selected}（已选定）`, s.selected));
+    sel.appendChild(new Option(`${s.selected}${T('mdlSuffixSelected')}`, s.selected));
   }
-  sel.value = s.selected || '';
+  setModelValue(engine, s.selected || '');
   renderEffortSelect(engine, s);
   const d = s.detected;
   if (d) {
     setModelStatus(
       engine,
       d.ok
-        ? `上次检测：当前实际模型 ${d.model}（来源：${d.source}）`
-        : `上次检测失败：${d.error || '未知原因'}`,
+        ? T('mdlLastDetect').replace('{model}', d.model).replace('{src}', detectSourceLabel(d.source))
+        : T('mdlLastDetectFail').replace('{err}', detectErrorLabel(d.error)),
       d.ok,
     );
   } else {
@@ -5558,61 +5708,51 @@ function setModelStatus(engine, text, ok) {
 }
 
 // 选定模型（含「自动」）；立即落盘，下一个任务生效
+// 自定义服务商是手填的输入框，change（失焦/回车）时同样走这里
 async function onModelSelect(engine) {
-  const sel = providerUi(engine).model;
-  const model = sel.value || '';
+  const model = modelValue(engine);
   try {
     await api('/api/model/select', { engine, model });
     setModelStatus(
       engine,
-      model ? `已选定 ${model}，下一个任务生效。` : '已设为自动，下一个任务生效。',
+      model ? T('mdlSelected').replace('{model}', model) : T('mdlSelectedAuto'),
       true,
     );
     renderAccSummary(engine);
   } catch (e) {
-    setModelStatus(engine, `保存失败：${e.message}`, false);
+    setModelStatus(engine, T('engSaveFail').replace('{err}', e.message), false);
   }
 }
 
 // 检测当前实际生效的模型（真实探测引擎）
 async function detectCurrentModel(engine) {
-  setModelStatus(engine, '正在检测当前模型（启动引擎读取实际模型，请稍候）…', null);
+  setModelStatus(engine, T('mdlDetecting'), null);
   try {
     const d = await api('/api/model/detect', { engine });
     setModelStatus(
       engine,
       d && d.ok
-        ? `当前实际模型：${d.model}（来源：${d.source}）`
-        : `检测失败：${(d && d.error) || '未知原因'}`,
+        ? T('mdlDetected').replace('{model}', d.model).replace('{src}', detectSourceLabel(d.source))
+        : T('mdlDetectFail').replace('{err}', detectErrorLabel(d && d.error)),
       !!(d && d.ok),
     );
     await loadModelState();
   } catch (e) {
-    setModelStatus(engine, `检测失败：${e.message}`, false);
+    setModelStatus(engine, T('mdlDetectFail').replace('{err}', e.message), false);
   }
 }
 
 // 检测可用模型；结果写回候选下拉
 async function detectAvailableModels(engine) {
   const verify = engine === 'claude' && $('mdlClaudeVerifyChk').checked;
-  setModelStatus(
-    engine,
-    verify
-      ? '正在逐个真实验证候选模型，可能需要一两分钟…'
-      : '正在获取可用模型列表…',
-    null,
-  );
+  setModelStatus(engine, verify ? T('mdlVerifying') : T('mdlListing'), null);
   try {
     const r = await api('/api/model/available', { engine, verify });
     const n = (r && r.models ? r.models.length : 0);
     await loadModelState();
-    setModelStatus(
-      engine,
-      `已获取 ${n} 个可用模型${verify ? '（✓=实测可用，✕=实测失败）' : ''}。`,
-      n > 0,
-    );
+    setModelStatus(engine, T(verify ? 'mdlGotNVerified' : 'mdlGotN').replace('{n}', n), n > 0);
   } catch (e) {
-    setModelStatus(engine, `获取失败：${e.message}`, false);
+    setModelStatus(engine, T('mdlGetFail').replace('{err}', e.message), false);
   }
 }
 
@@ -5622,20 +5762,15 @@ function providerUi(engine) {
   return {
     select: $(`${p}ProviderSelect`), cfg: $(`${p}ProviderCfg`), custom: $(`${p}CustomCfg`),
     key: $(`${p}ApiKey`), base: $(`${p}BaseUrl`), modelsUrl: $(`${p}ModelsUrl`),
-    model: $(`${p}ModelSelect`), modelBox: $(`${p}ModelBox`), status: $(`${p}ProviderStatus`),
+    model: $(`${p}ModelSelect`), modelInput: $(`${p}ModelInput`), modelList: $(`${p}ModelList`),
+    modelHint: $(`${p}ModelHint`), modelBox: $(`${p}ModelBox`), status: $(`${p}ProviderStatus`),
     effort: $(`${p}EffortSelect`),
   };
 }
 
-// 思考强度档位（后端 /api/model/state 下发，避免前端写死一份）。
-// 兜底值只在后端尚未重启（旧版无 efforts 字段）时使用。
-const EFFORT_FALLBACK = [
-  { id: 'low', label: '低（最快、最省）' },
-  { id: 'medium', label: '中（均衡）' },
-  { id: 'high', label: '高（更仔细）' },
-  { id: 'xhigh', label: '极高（复杂任务）' },
-  { id: 'max', label: '最高（最强推理，最慢）' },
-];
+// 思考强度档位的 id 顺序由后端 /api/model/state 下发（避免前端写死一份），
+// 展示文案一律走翻译层。兜底顺序只在后端尚未重启（旧版无 efforts 字段）时使用。
+const EFFORT_FALLBACK = [{ id: 'low' }, { id: 'medium' }, { id: 'high' }, { id: 'xhigh' }, { id: 'max' }];
 
 // 渲染某引擎的思考强度下拉。所有服务商（含原版）都可选。
 function renderEffortSelect(engine, s) {
@@ -5644,8 +5779,8 @@ function renderEffortSelect(engine, s) {
   const levels = (s && Array.isArray(s.efforts) && s.efforts.length) ? s.efforts : EFFORT_FALLBACK;
   const cur = (s && s.effort) || '';
   sel.innerHTML = '';
-  sel.appendChild(new Option('自动（交给引擎决定）', ''));
-  for (const e of levels) sel.appendChild(new Option(e.label || e.id, e.id));
+  sel.appendChild(new Option(T('effAuto'), ''));
+  for (const e of levels) sel.appendChild(new Option(effortLabel(e.id, e.label), e.id));
   sel.value = cur;
 }
 
@@ -5655,11 +5790,14 @@ async function onEffortSelect(engine) {
   const effort = sel.value || '';
   try {
     await api('/api/model/effort', { engine, effort });
-    const label = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : effort;
-    setModelStatus(engine, effort ? `思考强度已设为「${label}」，下一个任务生效。` : '思考强度已设为自动，下一个任务生效。', true);
+    setModelStatus(
+      engine,
+      effort ? T('effortSet').replace('{label}', effortLabel(effort)) : T('effortSetAuto'),
+      true,
+    );
     renderAccSummary(engine);
   } catch (e) {
-    setModelStatus(engine, `保存失败：${e.message}`, false);
+    setModelStatus(engine, T('engSaveFail').replace('{err}', e.message), false);
   }
 }
 // 只管显示/隐藏，不动模型选择——供「读取已保存配置后同步一次界面」调用，不清空当前模型
@@ -5669,7 +5807,12 @@ function syncProviderVisibility(engine) {
   const provider = u.select.value;
   u.cfg.hidden = provider === 'official';
   u.custom.hidden = provider !== 'custom';
-  // 模型选择框始终显示，允许原版订阅也选择模型
+  // 模型选择框始终显示，允许原版订阅也选择模型；
+  // 自定义服务商换成可手填的输入框（拉不到模型列表时也能用）
+  const free = provider === 'custom';
+  u.model.hidden = free;
+  u.modelInput.hidden = !free;
+  u.modelHint.hidden = !free;
 }
 // 用户在下拉里手动切换服务商 → 联动：**彻底隔离**。
 // 每个服务商在后端各有一槽（apiKey/model/effort/候选缓存），切过去就回显它自己上次的设置；
@@ -5679,7 +5822,8 @@ async function onEngineProviderChange(engine) {
   const u = providerUi(engine);
   const provider = u.select.value;
   // 先清干净，绝不让上一个服务商的值留在表单里
-  u.model.innerHTML = '';
+  clearModelChoices(engine);
+  setModelValue(engine, '');
   u.key.value = '';
   u.base.value = '';
   u.modelsUrl.value = '';
@@ -5701,24 +5845,22 @@ async function onEngineProviderChange(engine) {
     u.modelsUrl.value = slot.modelsUrl || '';
     const opts = Array.isArray(slot.models) ? slot.models : [];
     if (opts.length || slot.model) {
-      u.model.appendChild(new Option('自动（交给引擎决定）', ''));
-      for (const o of opts) u.model.appendChild(new Option(o.label || o.id, o.id));
+      fillModelChoices(engine, opts, true);
       if (slot.model && !opts.some((o) => o.id === slot.model))
-        u.model.appendChild(new Option(`${slot.model}（已选定）`, slot.model));
-      u.model.value = slot.model || '';
+        u.model.appendChild(new Option(`${slot.model}${T('mdlSuffixSelected')}`, slot.model));
+      setModelValue(engine, slot.model || '');
     }
     if (u.effort) u.effort.value = slot.effort || '';
     renderAccSummary(engine);
   }
   // 没有选定模型才自动定档（不覆盖用户上次的选择）
-  if (!u.model.value) autoPickModel(engine);
+  if (!modelValue(engine)) autoPickModel(engine);
 }
 // 「模型」标签旁的服务商小标要跟着表单里选中的服务商走
 // （否则会一直显示上次已保存的那个，和下面的模型对不上）
 function syncModelProviderTag(engine) {
   const cap = engine === 'claude' ? 'Claude' : 'Codex';
-  const v = providerUi(engine).select.value;
-  $(`mdl${cap}Provider`).textContent = v === 'official' ? '原版' : v;
+  $(`mdl${cap}Provider`).textContent = providerLabel(providerUi(engine).select.value);
 }
 function onClaudeProviderChange() { onEngineProviderChange('claude'); }
 
@@ -5729,30 +5871,26 @@ async function autoPickModel(engine) {
   const provider = u.select.value;
   if (provider === 'official') {
     // 原版订阅也可以选择模型：如果没有选定模型，自动填充内置候选列表
-    if (u.model.value) return; // 已有模型就不动
+    if (modelValue(engine)) return; // 已有模型就不动
     // 从后端获取可用模型列表（对于 official，返回内置候选）
     try {
       const r = await api('/api/model/available', { engine, verify: false });
       const models = r && r.models ? r.models : [];
       if (models.length > 0) {
-        u.model.innerHTML = '';
-        u.model.appendChild(new Option('自动（交给引擎决定）', ''));
-        for (const m of models) {
-          u.model.appendChild(new Option(m.label || m.id, m.id));
-        }
+        fillModelChoices(engine, models, true);
         // 默认选中 opus（如果有）
         const defaultModel = models.find(m => m.id === 'opus') || models[0];
         if (defaultModel) {
-          u.model.value = defaultModel.id;
-          setModelStatus(engine, `已自动选择 ${defaultModel.label || defaultModel.id}`, true);
+          setModelValue(engine, defaultModel.id);
+          setModelStatus(engine, T('mdlAutoPickedOne').replace('{model}', modelOptionText(defaultModel)), true);
         }
       }
     } catch (e) {
-      setModelStatus(engine, `获取模型列表失败：${e.message}`, false);
+      setModelStatus(engine, T('mdlListFail').replace('{err}', e.message), false);
     }
     return;
   }
-  if (u.model.value) return; // 已有模型就不动，避免覆盖用户的选择
+  if (modelValue(engine)) return; // 已有模型就不动，避免覆盖用户的选择
   if (!u.key.value.trim()) {
     setModelStatus(engine, T('modelNeedKey'), null);
     return;
@@ -5765,7 +5903,7 @@ async function autoPickModel(engine) {
 }
 // API Key 填完（失焦/回车）时：若还没有模型就自动检测一次
 function onApiKeySettled(engine) {
-  if (providerUi(engine).model.value) return;
+  if (modelValue(engine)) return;
   autoPickModel(engine);
 }
 
@@ -5778,19 +5916,22 @@ async function loadEngineProvider(engine) {
     u.key.value = c.apiKey || '';
     u.base.value = c.baseUrl || '';
     u.modelsUrl.value = c.modelsUrl || '';
-    u.model.innerHTML = '';
+    clearModelChoices(engine);
     if (c.model) {
-      const o = document.createElement('option'); o.value = c.model; o.textContent = c.model;
-      u.model.appendChild(o);
+      u.model.appendChild(new Option(c.model, c.model));
+      u.modelList.appendChild(new Option(c.model, c.model));
     }
+    setModelValue(engine, c.model || '');
     if (u.effort) u.effort.value = c.effort || '';
     syncProviderVisibility(engine);
     syncModelProviderTag(engine);
     u.status.className = 'sx-note';
     // 说明的是「已保存」的状态（表单里可能已改成别的服务商但还没点保存），文案要写明白
     u.status.textContent = c.provider === 'official'
-      ? `已保存：原版${engine === 'claude' ? '订阅' : ' ChatGPT'}登录流程。`
-      : `已保存：${c.provider}${c.model ? '（模型 ' + c.model + '）' : ''}`;
+      ? T(engine === 'claude' ? 'engSavedOfficialClaude' : 'engSavedOfficialCodex')
+      : T(c.model ? 'engSavedProviderModel' : 'engSavedProvider')
+        .replace('{provider}', providerLabel(c.provider))
+        .replace('{model}', c.model || '');
     renderAccSummary(engine);
     // 原版订阅也可以选择模型：如果没有选定模型，自动填充内置候选列表
     if (c.provider === 'official' && !c.model) {
@@ -5800,7 +5941,7 @@ async function loadEngineProvider(engine) {
     if (c.provider !== 'official' && c.apiKey && !c.model) autoPickModel(engine);
   } catch (e) {
     u.status.className = 'sx-note err';
-    u.status.textContent = `读取 ${engine} 服务商配置失败：${e.message}`;
+    u.status.textContent = T('engLoadFail').replace('{engine}', engine).replace('{err}', e.message);
   }
 }
 function loadClaudeProvider() { return loadEngineProvider('claude'); }
@@ -5819,39 +5960,34 @@ async function fetchEngineModels(engine, auto = false) {
   };
   // 原版订阅：走 /api/model/available 获取内置候选列表
   if (provider === 'official') {
-    const prev = u.model.value;
-    u.model.innerHTML = '';
+    const prev = modelValue(engine);
+    clearModelChoices(engine);
     say(auto ? T('modelAutoDetecting') : T('modelFetching'), null);
     try {
       const r = await api('/api/model/available', { engine, verify: false });
       const models = r && r.models ? r.models : [];
       if (!models.length) throw new Error(T('modelEmptyList'));
-      u.model.appendChild(new Option('自动（交给引擎决定）', ''));
-      models.forEach((m) => {
-        const label = m.label || m.id;
-        const mark = m.verified === true ? ' ✓' : m.verified === false ? ' ✕' : '';
-        u.model.appendChild(new Option(`${label}${mark}`, m.id));
-      });
+      fillModelChoices(engine, models, true);
       // 优先保留用户原本的选择；否则选中第一个
       const pick = (prev && models.some(m => m.id === prev) && prev) || models[0]?.id || '';
-      u.model.value = pick;
+      setModelValue(engine, pick);
       say(
         auto
-          ? T('modelAutoPicked').replace('{model}', pick || '自动').replace('{n}', models.length)
+          ? T('modelAutoPicked').replace('{model}', pick || T('effAutoShort')).replace('{n}', models.length)
           : T('modelFetched').replace('{n}', models.length),
         true,
       );
       renderAccSummary(engine);
     } catch (e) {
-      u.model.innerHTML = '';
+      clearModelChoices(engine);
       say(T('modelFetchFail').replace('{err}', e.message), false);
     }
     return;
   }
   if (!apiKey) { say(T('modelNeedKey'), false); return; }
   if (provider === 'custom' && !u.base.value.trim()) { say(T('modelNeedBase'), false); return; }
-  const prev = u.model.value;
-  u.model.innerHTML = '';
+  const prev = modelValue(engine);
+  clearModelChoices(engine);
   say(auto ? T('modelAutoDetecting') : T('modelFetching'), null);
   try {
     const q = new URLSearchParams({ provider, apiKey });
@@ -5860,17 +5996,15 @@ async function fetchEngineModels(engine, auto = false) {
       q.set('modelsUrl', u.modelsUrl.value.trim());
     }
     const r = await api(`/api/engine/models?${q.toString()}`);
+    // 服务商 API 只返回 id 字符串，统一成候选对象再进下拉/提示列表
     const models = (r && r.models) || [];
     if (!models.length) throw new Error(T('modelEmptyList'));
-    models.forEach((m) => {
-      const o = document.createElement('option'); o.value = m; o.textContent = m;
-      u.model.appendChild(o);
-    });
+    fillModelChoices(engine, models.map((id) => ({ id, source: 'api' })), false);
     // 优先保留用户原本的选择；否则用后端在真实返回列表里挑的推荐模型；再否则第一个
     const pick = (prev && models.includes(prev) && prev)
       || (r.recommended && models.includes(r.recommended) && r.recommended)
       || models[0];
-    u.model.value = pick;
+    setModelValue(engine, pick);
     say(
       auto
         ? T('modelAutoPicked').replace('{model}', pick).replace('{n}', models.length)
@@ -5879,7 +6013,10 @@ async function fetchEngineModels(engine, auto = false) {
     );
     renderAccSummary(engine);
   } catch (e) {
-    u.model.innerHTML = '';
+    // 自定义服务商拉不到列表是常事（很多网关没有 /models）：清空候选但保留已填的模型 id
+    const kept = modelIsFree(engine) ? prev : '';
+    clearModelChoices(engine);
+    setModelValue(engine, kept);
     say(T('modelFetchFail').replace('{err}', e.message), false);
   }
 }
@@ -5889,8 +6026,8 @@ async function saveEngineProvider(engine) {
   const u = providerUi(engine);
   const provider = u.select.value;
   // 第三方缺模型时先自动补一次（多数情况用户根本不用管模型），补不上才报错
-  if (provider !== 'official' && !u.model.value) await autoPickModel(engine);
-  const model = u.model.value || '';
+  if (provider !== 'official' && !modelValue(engine)) await autoPickModel(engine);
+  const model = modelValue(engine);
   if (provider !== 'official' && !model) {
     u.status.className = 'sx-note err';
     u.status.textContent = T('modelPickFirst');
@@ -5904,12 +6041,12 @@ async function saveEngineProvider(engine) {
       modelsUrl: provider === 'custom' ? u.modelsUrl.value.trim() : '',
     });
     u.status.className = 'sx-note ok';
-    u.status.textContent = '已保存。新会话/新任务即使用该服务商与模型。';
+    u.status.textContent = T('engSavedOk');
     await loadModelState();
     renderAccSummary(engine);
   } catch (e) {
     u.status.className = 'sx-note err';
-    u.status.textContent = '保存失败：' + e.message;
+    u.status.textContent = T('engSaveFail').replace('{err}', e.message);
   }
 }
 function saveClaudeProvider() { return saveEngineProvider('claude'); }

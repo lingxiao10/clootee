@@ -521,6 +521,9 @@ export class Server {
       }),
     );
 
+    // 注：小白教程的 AI 小助手不在这里。MiniMax 官方接口已放行 CORS，教程页直接从浏览器调用，
+    // 后端不参与，也就没有「忘了重启就失灵」这回事。见 frontend/learn-assist.js。
+
     const server = http.createServer(app);
     const wss = new WebSocketServer({ server, path: '/ws' });
     wss.on('connection', (ws, req) => {

@@ -346,30 +346,35 @@
               <span class="eng-acc-sum" id="engAccClaudeSum"></span>
             </button>
             <div class="eng-acc-body" id="engAccClaudeBody">
-              <label class="sx-lbl">服务商</label>
+              <label class="sx-lbl" id="claudeProviderLbl">服务商</label>
               <select class="sx-input" id="claudeProviderSelect">
                 <option value="official">原版（订阅登录，未登录会引导登录）</option>
                 <option value="minimax">MiniMax（推荐，支持图片识别）</option>
                 <option value="xiaomi">小米 MiMo</option>
-                <option value="kimi">Kimi（Moonshot）</option>
+                <option value="kimi">Kimi 开放平台（按量计费）</option>
+                <option value="kimicode">Kimi Code（包月订阅）</option>
                 <option value="custom">自定义服务商</option>
               </select>
               <div id="claudeProviderCfg" hidden>
                 <div id="claudeCustomCfg" hidden>
-                  <label class="sx-lbl">Anthropic 兼容 Base URL</label>
+                  <label class="sx-lbl" id="claudeBaseUrlLbl">Anthropic 兼容 Base URL</label>
                   <input class="sx-input" id="claudeBaseUrl" spellcheck="false" placeholder="例如 https://example.com/anthropic" />
-                  <label class="sx-lbl">模型列表 URL（可选）</label>
+                  <label class="sx-lbl" id="claudeModelsUrlLbl">模型列表 URL（可选）</label>
                   <input class="sx-input" id="claudeModelsUrl" spellcheck="false" placeholder="默认 Base URL + /models" />
                 </div>
-                <label class="sx-lbl">API Key</label>
+                <label class="sx-lbl" id="claudeApiKeyLbl">API Key</label>
                 <input class="sx-input" id="claudeApiKey" type="text" placeholder="sk-…（填好后会自动检测并选一个模型）" />
               </div>
               <!-- 模型与思考强度：每个服务商各自保存一套（互不干扰）。
                    原版订阅也可以选模型与强度；换服务商 / 填好 Key 后会自动拉取并选中推荐模型 -->
               <div id="claudeModelBox">
-                <label class="sx-lbl">模型 <span class="sx-tag" id="mdlClaudeProvider"></span></label>
+                <label class="sx-lbl"><span id="claudeModelLbl">模型</span> <span class="sx-tag" id="mdlClaudeProvider"></span></label>
                 <select class="sx-input" id="claudeModelSelect"></select>
-                <label class="sx-lbl">思考强度</label>
+                <!-- 自定义服务商：模型列表未必拉得到，允许直接手填（候选仍以 datalist 提示） -->
+                <input class="sx-input" id="claudeModelInput" list="claudeModelList" spellcheck="false" hidden />
+                <datalist id="claudeModelList"></datalist>
+                <div class="sx-note" id="claudeModelHint" hidden></div>
+                <label class="sx-lbl" id="claudeEffortLbl">思考强度</label>
                 <select class="sx-input" id="claudeEffortSelect"></select>
                 <div class="sx-note" id="claudeEffortNote">强度越高思考越久、消耗越多；「自动」= 交给引擎决定。</div>
                 <div class="sx-adv">
@@ -382,7 +387,7 @@
                       <button class="sx-btn" id="mdlClaudeDetectBtn">检测当前模型</button>
                       <button class="sx-btn" id="mdlClaudeListBtn">检测可用模型</button>
                     </div>
-                    <label class="sx-chk"><input type="checkbox" id="mdlClaudeVerifyChk" /><span class="sx-chk-txt"><b>逐个真实验证可用性</b><em>每个候选发一次极小请求，较慢但更准确</em></span></label>
+                    <label class="sx-chk"><input type="checkbox" id="mdlClaudeVerifyChk" /><span class="sx-chk-txt"><b id="mdlClaudeVerifyTitle">逐个真实验证可用性</b><em id="mdlClaudeVerifyDesc">每个候选发一次极小请求，较慢但更准确</em></span></label>
                   </div>
                 </div>
               </div>
@@ -401,28 +406,33 @@
               <span class="eng-acc-sum" id="engAccCodexSum"></span>
             </button>
             <div class="eng-acc-body" id="engAccCodexBody" hidden>
-              <label class="sx-lbl">服务商</label>
+              <label class="sx-lbl" id="codexProviderLbl">服务商</label>
               <select class="sx-input" id="codexProviderSelect">
                 <option value="official">原版 ChatGPT（账号登录）</option>
                 <option value="minimax">MiniMax</option>
                 <option value="xiaomi">小米 MiMo</option>
-                <option value="kimi">Kimi（Moonshot）</option>
+                <!-- Codex 不列 Kimi Code：那是给编程 Agent 的包月订阅，OpenAI 兼容端点对客户端有限制，
+                     且 Codex 走的是 config.toml 档位 + 本地代理（见 CodexProfile），与这里的机制不同 -->
+                <option value="kimi">Kimi 开放平台（按量计费）</option>
                 <option value="custom">自定义服务商</option>
               </select>
               <div id="codexProviderCfg" hidden>
                 <div id="codexCustomCfg" hidden>
-                  <label class="sx-lbl">OpenAI Chat Completions Base URL</label>
+                  <label class="sx-lbl" id="codexBaseUrlLbl">OpenAI Chat Completions Base URL</label>
                   <input class="sx-input" id="codexBaseUrl" spellcheck="false" placeholder="例如 https://example.com/v1" />
-                  <label class="sx-lbl">模型列表 URL（可选）</label>
+                  <label class="sx-lbl" id="codexModelsUrlLbl">模型列表 URL（可选）</label>
                   <input class="sx-input" id="codexModelsUrl" spellcheck="false" placeholder="默认 Base URL + /models" />
                 </div>
-                <label class="sx-lbl">API Key</label>
+                <label class="sx-lbl" id="codexApiKeyLbl">API Key</label>
                 <input class="sx-input" id="codexApiKey" type="text" placeholder="sk-…（填好后会自动检测并选一个模型）" />
               </div>
               <div id="codexModelBox">
-                <label class="sx-lbl">模型 <span class="sx-tag" id="mdlCodexProvider"></span></label>
+                <label class="sx-lbl"><span id="codexModelLbl">模型</span> <span class="sx-tag" id="mdlCodexProvider"></span></label>
                 <select class="sx-input" id="codexModelSelect"></select>
-                <label class="sx-lbl">思考强度</label>
+                <input class="sx-input" id="codexModelInput" list="codexModelList" spellcheck="false" hidden />
+                <datalist id="codexModelList"></datalist>
+                <div class="sx-note" id="codexModelHint" hidden></div>
+                <label class="sx-lbl" id="codexEffortLbl">思考强度</label>
                 <select class="sx-input" id="codexEffortSelect"></select>
                 <div class="sx-note" id="codexEffortNote">Codex 只有低/中/高三档，选「极高/最高」会按「高」执行。</div>
                 <div class="sx-adv">
@@ -567,6 +577,19 @@
   <div class="app">
     <!-- 移动端抽屉遮罩 -->
     <div class="scrim" id="scrim"></div>
+
+    <!-- 教程入口菜单（点击 📖 弹出：快速上手指南 / 小白教程） -->
+    <div class="guide-menu" id="guideMenu" hidden>
+      <div class="theme-panel-title" id="guideMenuTitle"></div>
+      <button type="button" class="gm-opt" id="gmQuick">
+        <span class="gm-ic">📖</span>
+        <span class="gm-txt"><span class="gm-t" id="gmQuickT"></span><span class="gm-d" id="gmQuickD"></span></span>
+      </button>
+      <button type="button" class="gm-opt" id="gmLearn">
+        <span class="gm-ic">🎓</span>
+        <span class="gm-txt"><span class="gm-t" id="gmLearnT"></span><span class="gm-d" id="gmLearnD"></span></span>
+      </button>
+    </div>
 
     <!-- 主题选择面板（点击 🎨 弹出） -->
     <div class="theme-panel" id="themePanel" hidden>
@@ -870,11 +893,11 @@
   <script src="vendor/cm/mode/sass/sass.min.js"></script>
   <script src="vendor/cm/mode/dart/dart.min.js"></script>
   <script src="vendor/cm/mode/swift/swift.min.js"></script>
-  <script src="trans.js?v=20260813b"></script>
+  <script src="trans.js?v=20260817f"></script>
   <script src="workspace.js?v=20260801i"></script>
   <script src="rootwizard.js?v=20260804a"></script>
-  <script src="health.js?v=20260810f"></script>
-  <script src="onboard.js?v=20260810f"></script>
+  <script src="health.js?v=20260817f"></script>
+  <script src="onboard.js?v=20260817f"></script>
   <script src="galaxy.js?v=20260801p"></script>
   <script src="cyber.js?v=20260801z1"></script>
   <script src="rain.js?v=20260801i"></script>
@@ -886,6 +909,6 @@
   <script src="cat.js?v=20260801q"></script>
   <script src="rabbit.js?v=20260801z"></script>
   <script src="mecha.js?v=20260802a"></script>
-  <script src="app.js?v=20260813c"></script>
+  <script src="app.js?v=20260817f"></script>
 </body>
 </html>

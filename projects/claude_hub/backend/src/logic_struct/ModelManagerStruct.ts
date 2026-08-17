@@ -78,7 +78,8 @@ export class ModelManagerStruct {
   private static _mergeDetected(opts: ModelOption[], d?: ModelDetect): ModelOption[] {
     if (!d || !d.ok || !d.model) return opts;
     if (opts.some((o) => o.id === d.model)) return opts;
-    return [{ id: d.model, label: `${d.model}（当前实际）`, source: 'detected', verified: true }, ...opts];
+    // 展示名不在这里拼（前端按 source==='detected' 加「当前实际」后缀，文案随语言走）
+    return [{ id: d.model, source: 'detected', verified: true }, ...opts];
   }
 
   // 当前状态取自 EngineConfig.get() 的**投影视图**（只含当前服务商那一槽），

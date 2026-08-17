@@ -27,9 +27,9 @@ export class ModelManager extends ModelManagerStruct {
     return {
       engine: 'claude',
       model: r.model,
-      source: 'claude stream-json init 帧',
+      source: 'claude-init',
       ok: r.ok && !!r.model,
-      error: r.ok ? (r.model ? undefined : '未从 init 帧读到 model 字段') : r.error,
+      error: r.ok ? (r.model ? undefined : 'init-no-model') : r.error,
       at: Date.now(),
     };
   }
@@ -42,20 +42,15 @@ export class ModelManager extends ModelManagerStruct {
     };
     const fromToml = this._codexTomlModel();
     if (fromToml) {
-      return { ...base, model: fromToml, source: 'codex config.toml (model=)', ok: true };
+      return { ...base, model: fromToml, source: 'codex-toml', ok: true };
     }
     try {
       const catalog = await this._codexCatalog();
       const top = catalog[0];
       if (top) {
-        return {
-          ...base,
-          model: top.id,
-          source: 'codex 模型目录默认项（config.toml 未指定 model）',
-          ok: true,
-        };
+        return { ...base, model: top.id, source: 'codex-catalog', ok: true };
       }
-      return { ...base, model: '', source: 'codex', ok: false, error: '模型目录为空' };
+      return { ...base, model: '', source: 'codex', ok: false, error: 'codex-catalog-empty' };
     } catch (e) {
       return {
         ...base,
@@ -83,7 +78,8 @@ export class ModelManager extends ModelManagerStruct {
       out.push({
         ...m,
         verified: r.ok,
-        note: r.ok ? r.model && r.model !== m.id ? `解析为 ${r.model}` : undefined : r.error,
+        // 备注要跨语言可读：解析结果写成「→ 全名」，失败则原样带上引擎的报错
+        note: r.ok ? r.model && r.model !== m.id ? `→ ${r.model}` : undefined : r.error,
       });
     }
     return out;
@@ -182,7 +178,7 @@ export class ModelManager extends ModelManagerStruct {
       );
 
       const timer = setTimeout(
-        () => finish({ ok: !!seen, model: seen, error: seen ? undefined : '探测超时' }),
+        () => finish({ ok: !!seen, model: seen, error: seen ? undefined : 'probe-timeout' }),
         timeoutMs,
       );
     });

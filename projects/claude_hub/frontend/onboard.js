@@ -280,7 +280,9 @@ function renderOnboardProvider() {
         : `<span class="ob-badge warn">${T('obKeyNeeded')}</span>`;
       const rec = p.recommended ? `<span class="ob-badge ok">${T('obRecommended')}</span>` : '';
       const vis = p.vision ? `<span class="ob-badge ok">${T('obVision')}</span>` : '';
-      return obCard(Onboard.provider === p.id, `data-pv="${p.id}"`, `<b>${p.label || p.id}</b>${rec}${vis}${tag}`, p.note || '');
+      // 名称与说明走翻译层（后端只给 id；认不出的新服务商回落到后端文案）
+      const name = providerLabel(p.id, p.label);
+      return obCard(Onboard.provider === p.id, `data-pv="${p.id}"`, `<b>${name}</b>${rec}${vis}${tag}`, providerNote(p.id, p.note));
     })
     .join('') +
     (Onboard.engine === 'codex' ? `<div class="ob-note">${T('obCodexOnly')}</div>` : '');
@@ -330,7 +332,7 @@ function renderOnboardLogin() {
 // ── 第 5 步（第三方服务商）：填 API Key（含开通链接与指南）+ 选模型 ──
 function renderOnboardKey() {
   const meta = onboardProviderMeta(Onboard.provider) || {};
-  $('onboardTitle').textContent = `${T('obStepKey')} · ${meta.label || Onboard.provider}`;
+  $('onboardTitle').textContent = `${T('obStepKey')} · ${providerLabel(Onboard.provider, meta.label)}`;
   $('onboardSub').textContent = T('obStepKeySub');
   // 只首推 MiniMax，不再为其他服务商做「免费额度」这类推荐性提示
   const freeOrPaid = T('obKeyStepPaid');

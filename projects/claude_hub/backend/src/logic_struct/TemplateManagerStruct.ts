@@ -1,6 +1,6 @@
 // 项目模板管理（调度骨架）。文件检测/读写/复制均经 FsHelper 可达，故直接在 Struct 实现。
 // 用途：新建或选择根目录后，若缺少 CLAUDE.md/AGENTS.md，引导用户选一个模板：
-//   - 内置模板（web-tool / web-game-2d / web-game-3d / python-tool）→ 写入对应的 CLAUDE.md + AGENTS.md
+//   - 内置模板（web-tool / app-fullstack / web-game-2d / web-game-3d / python-tool）→ 写入对应的 CLAUDE.md + AGENTS.md
 //   - 自定义模板（设置里 templateCollectionPath 下的每个直接子文件夹）→ 把其内容复制覆盖到项目
 import { FsHelper } from '../helper/FsHelper';
 import { TemplatesConfig } from '../config/TemplatesConfig';

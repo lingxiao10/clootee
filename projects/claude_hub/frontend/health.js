@@ -92,7 +92,7 @@ function netCheckHtml(r, o) {
 }
 
 // 国产服务商在体检卡片里的展示名（与后端 provider id 对应）
-const DOMESTIC_LABEL = { minimax: 'MiniMax', kimi: 'Kimi', xiaomi: '小米 MiMo' };
+const DOMESTIC_LABEL = { minimax: 'MiniMax', kimi: 'Kimi 开放平台', kimicode: 'Kimi Code 订阅', xiaomi: '小米 MiMo' };
 
 function bindNetCheck(el, o) {
   const retry = el.querySelector('[data-hc-retry]');
@@ -138,7 +138,7 @@ function claudeLoginHtml(a, s) {
   if (a.provider && a.provider !== 'official')
     return `<div class="cl ok"><div class="cl-h"><b>${T('clTitle')}</b>` +
       `<span class="hc-badge ok">${T('clNotNeeded')}</span></div>` +
-      `<div class="cl-hint">${T('clThirdParty').replace('{p}', escapeHtml(a.provider))}</div></div>`;
+      `<div class="cl-hint">${T('clThirdParty').replace('{p}', escapeHtml(providerLabel(a.provider)))}</div></div>`;
 
   if (!a.cliFound)
     return `<div class="cl bad"><div class="cl-h"><b>${T('clTitle')}</b>` +

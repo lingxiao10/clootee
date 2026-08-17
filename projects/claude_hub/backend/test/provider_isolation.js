@@ -131,6 +131,73 @@ EngineConfig.setEffort('claude', 'low');
 env = EngineConfig.claudeEnv();
 ok('选了 low 则覆盖 kimi 的 max', env.CLAUDE_CODE_EFFORT_LEVEL === 'low', env.CLAUDE_CODE_EFFORT_LEVEL);
 
+// ── 3b. 小米 MiMo：订阅 Key（tp-）与按量 Key（sk-）走不同域名 ──
+// 官方文档：sk- 打 api.xiaomimimo.com，tp-（Token Plan 订阅）打 token-plan-cn.xiaomimimo.com，两者不通用。
+console.log('\n[3b] 小米 订阅/按量 端点区分');
+EngineConfig.setProvider('claude', {
+  provider: 'xiaomi', apiKey: 'sk-mimo-payg', model: 'mimo-v2.5-pro', effort: '',
+});
+EngineConfig.setCache('claude', { models: [{ id: 'mimo-v2.5-pro', source: 'api' }] });
+env = EngineConfig.claudeEnv();
+ok('按量 sk- Key 走 api.xiaomimimo.com',
+  env.ANTHROPIC_BASE_URL === 'https://api.xiaomimimo.com/anthropic', env.ANTHROPIC_BASE_URL);
+
+EngineConfig.setProvider('claude', {
+  provider: 'xiaomi', apiKey: 'tp-mimo-plan', model: 'mimo-v2.5-pro', effort: '',
+});
+env = EngineConfig.claudeEnv();
+ok('订阅 tp- Key 走 token-plan-cn.xiaomimimo.com',
+  env.ANTHROPIC_BASE_URL === 'https://token-plan-cn.xiaomimimo.com/anthropic', env.ANTHROPIC_BASE_URL);
+ok('换 Key 后模型候选缓存失效（两套 Key 可用模型可能不同）',
+  !(EngineConfig.get().claude.models || []).length, EngineConfig.get().claude.models);
+
+EngineConfig.setProvider('codex', {
+  provider: 'xiaomi', apiKey: 'tp-mimo-plan', model: 'mimo-v2.5-pro', effort: '',
+});
+ok('codex 上游同样按 tp- 切到 token-plan-cn',
+  EngineConfig.codexUpstream().baseUrl === 'https://token-plan-cn.xiaomimimo.com/v1',
+  EngineConfig.codexUpstream().baseUrl);
+EngineConfig.setProvider('codex', {
+  provider: 'xiaomi', apiKey: 'sk-mimo-payg', model: 'mimo-v2.5-pro', effort: '',
+});
+ok('codex 上游按 sk- 回到 api 域名',
+  EngineConfig.codexUpstream().baseUrl === 'https://api.xiaomimimo.com/v1',
+  EngineConfig.codexUpstream().baseUrl);
+
+// ── 3c. Kimi：开放平台（按量）与 Kimi Code（订阅）是两个独立服务商，各占一槽 ──
+// 两边 Key 都是 sk- 开头，认不出来，所以靠「分成两个服务商」而不是前缀自动切。
+console.log('\n[3c] Kimi 开放平台 / Kimi Code 分槽');
+EngineConfig.setProvider('claude', {
+  provider: 'kimi', apiKey: 'sk-kimi-openplatform', model: 'kimi-k2', effort: '',
+});
+ok('开放平台走 api.moonshot.cn',
+  EngineConfig.claudeEnv().ANTHROPIC_BASE_URL === 'https://api.moonshot.cn/anthropic',
+  EngineConfig.claudeEnv().ANTHROPIC_BASE_URL);
+
+EngineConfig.setProvider('claude', {
+  provider: 'kimicode', apiKey: 'sk-kimi-code-plan', model: 'kimi-for-coding', effort: '',
+});
+env = EngineConfig.claudeEnv();
+ok('Kimi Code 走 api.kimi.com/coding',
+  env.ANTHROPIC_BASE_URL === 'https://api.kimi.com/coding', env.ANTHROPIC_BASE_URL);
+ok('Kimi Code 用自己的 Key', env.ANTHROPIC_AUTH_TOKEN === 'sk-kimi-code-plan', env.ANTHROPIC_AUTH_TOKEN);
+ok('Kimi Code 不继承 kimi 的 extraEnv（未配 = 不注入）',
+  env.CLAUDE_CODE_AUTO_COMPACT_WINDOW === undefined, env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
+
+const kslots = EngineConfig.slots('claude');
+ok('两个 Kimi 各自一槽、Key 互不覆盖',
+  (kslots.kimi || {}).apiKey === 'sk-kimi-openplatform'
+    && (kslots.kimicode || {}).apiKey === 'sk-kimi-code-plan',
+  { kimi: kslots.kimi, kimicode: kslots.kimicode });
+
+// 其他服务商没有 subscription 配置 → 不受 Key 前缀影响
+EngineConfig.setProvider('claude', {
+  provider: 'kimi', apiKey: 'tp-not-a-plan-key', model: 'kimi-k2', effort: '',
+});
+ok('无订阅端点的服务商不受 tp- 前缀影响',
+  EngineConfig.claudeEnv().ANTHROPIC_BASE_URL === 'https://api.moonshot.cn/anthropic',
+  EngineConfig.claudeEnv().ANTHROPIC_BASE_URL);
+
 // ── 4. effort 校验与 codex 降级映射 ──
 console.log('\n[4] effort 校验与 codex 降级');
 let threw = false;

@@ -29,6 +29,14 @@ export const TemplatesConfig = {
       desc: { zh: 'TypeScript + HTML 网页工具，含 UI 规范、双语、双主题', en: 'TypeScript + HTML web tool with UI norms, i18n & theming' },
     },
     {
+      id: 'app-fullstack',
+      label: { zh: '开发应用 (前后端 TS)', en: 'App (Full-stack TS)' },
+      desc: {
+        zh: 'TS 前后端 + SQLite，模块化分层、默认双语、双主题',
+        en: 'TS front & back end + SQLite, modular layering, bilingual by default, dual themes',
+      },
+    },
+    {
       id: 'web-game-2d',
       label: { zh: '网页游戏·平面 (TS)', en: 'Web Game · 2D (TS)' },
       desc: {

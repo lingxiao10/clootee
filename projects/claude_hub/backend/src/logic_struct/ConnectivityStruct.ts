@@ -50,7 +50,8 @@ export const NET_TARGETS: NetTarget[] = [
   { key: 'anthropic-api', label: 'Claude API（api.anthropic.com）', url: 'https://api.anthropic.com/v1/models', group: 'anthropic' },
   { key: 'claude-com', label: 'Claude 登录站（claude.com）', url: 'https://claude.com/', group: 'anthropic' },
   { key: 'minimax', label: 'MiniMax（国产）', url: 'https://api.minimaxi.com/v1/models', group: 'domestic', provider: 'minimax' },
-  { key: 'kimi', label: 'Kimi 月之暗面（国产）', url: 'https://api.moonshot.cn/v1/models', group: 'domestic', provider: 'kimi' },
+  { key: 'kimi', label: 'Kimi 开放平台（国产）', url: 'https://api.moonshot.cn/v1/models', group: 'domestic', provider: 'kimi' },
+  { key: 'kimicode', label: 'Kimi Code 订阅（国产）', url: 'https://api.kimi.com/coding/v1/models', group: 'domestic', provider: 'kimicode' },
   { key: 'xiaomi', label: '小米 MiMo（国产）', url: 'https://api.xiaomimimo.com/v1/models', group: 'domestic', provider: 'xiaomi' },
 ];
 

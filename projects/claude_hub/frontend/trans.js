@@ -273,9 +273,21 @@ const DICT = {
   },
   nothingSelected: { en: 'Nothing selected', zh: '未选择任何项' },
   lang: { en: '中文', zh: 'EN' },
+  // ── 教程入口菜单（点 📖 弹出：快速上手 / 小白教程）──
+  guideMenuTitle: { en: 'TUTORIALS', zh: '教程' },
+  guideMenuQuickT: { en: 'Quick start guide', zh: '快速上手指南' },
+  guideMenuQuickD: {
+    en: 'One page: what every button does. 3 minutes.',
+    zh: '一页说清每个按钮干什么，3 分钟看完。',
+  },
+  guideMenuLearnT: { en: 'Beginner course (from zero)', zh: '小白教程（零基础）' },
+  guideMenuLearnD: {
+    en: '8 chapters, quizzes, hands-on tasks — learn to get real work done with Claude Code.',
+    zh: '8 章知识点 + 测验 + 实操，一步步学会用 Claude Code 干真实工作。',
+  },
   // ── 使用指南 ──
   guideTitle: { en: '📖 Quick Start Guide', zh: '📖 使用指南' },
-  guideBtn: { en: 'User guide', zh: '使用指南' },
+  guideBtn: { en: 'Tutorials', zh: '教程' },
   guideGotIt: { en: 'Got it, let’s go!', zh: '明白啦，开始使用！' },
   guideHtml: {
     zh: `
@@ -640,6 +652,139 @@ const DICT = {
   modelPickFirst: {
     en: 'Could not settle on a model. Open Advanced → “Re-fetch models” and pick one, then save.',
     zh: '没能定下模型。请展开「高级选项」→「重新拉取模型」选一个后再保存。',
+  },
+  // ── AI 引擎板块：服务商 / 模型 / 思考强度（静态文案 + 运行时提示）──
+  // 服务商展示名：下拉选项、模型旁的小标、折叠标题摘要三处共用同一份，避免各写各的
+  pvOfficial: { en: 'Official', zh: '原版' },
+  pvOfficialClaude: {
+    en: 'Official (subscription login; you will be guided to log in)',
+    zh: '原版（订阅登录，未登录会引导登录）',
+  },
+  pvOfficialCodex: { en: 'Official ChatGPT (account login)', zh: '原版 ChatGPT（账号登录）' },
+  pvMinimax: { en: 'MiniMax', zh: 'MiniMax' },
+  pvMinimaxTag: { en: ' (recommended, supports image input)', zh: '（推荐，支持图片识别）' },
+  pvXiaomi: { en: 'Xiaomi MiMo', zh: '小米 MiMo' },
+  pvKimi: { en: 'Kimi Open Platform (pay-as-you-go)', zh: 'Kimi 开放平台（按量计费）' },
+  pvKimicode: { en: 'Kimi Code (monthly subscription)', zh: 'Kimi Code（包月订阅）' },
+  pvCustom: { en: 'Custom provider', zh: '自定义服务商' },
+  // 服务商一句话说明（新手引导的卡片；后端只给 id，文案在这里）
+  pvNoteMinimax: {
+    en: 'MiniMax latest models (list fetched live). Strong at code and supports image input — the pick we recommend.',
+    zh: 'MiniMax 最新模型（列表实时拉取），代码能力强且支持图片识别，国产模型首推',
+  },
+  pvNoteXiaomi: {
+    en: 'Xiaomi in-house models, direct connection. Both pay-as-you-go keys (sk-) and Token Plan subscription keys (tp-) work — paste either and the endpoint is picked automatically.',
+    zh: '小米自研模型，国内直连；按量计费 Key（sk-）与订阅 Token Plan Key（tp-）都支持，粘进来自动识别',
+  },
+  pvNoteKimi: {
+    en: 'Direct connection, strong on long context, pay-as-you-go (top up first). Create the key in the open-platform console.',
+    zh: '国内直连，长上下文见长，按量计费需先充值；Key 在开放平台控制台创建',
+  },
+  pvNoteKimicode: {
+    en: 'Pick this if you bought a Kimi Code monthly plan. The key must be created in the kimi.com/code console — open-platform keys do not work here (both start with sk-, do not mix them up).',
+    zh: '已买 Kimi Code 月卡的选这个；Key 要在 kimi.com/code 控制台单独建，和开放平台的 Key 不通用（都是 sk- 开头，别拿错）',
+  },
+  engProviderLabel: { en: 'Provider', zh: '服务商' },
+  engModelLabel: { en: 'Model', zh: '模型' },
+  engEffortLabel: { en: 'Thinking effort', zh: '思考强度' },
+  engApiKeyLabel: { en: 'API Key', zh: 'API Key' },
+  engApiKeyPh: {
+    en: 'sk-… (once filled in, a model is detected and picked automatically)',
+    zh: 'sk-…（填好后会自动检测并选一个模型）',
+  },
+  engBaseUrlClaude: { en: 'Anthropic-compatible Base URL', zh: 'Anthropic 兼容 Base URL' },
+  engBaseUrlCodex: { en: 'OpenAI Chat Completions Base URL', zh: 'OpenAI Chat Completions Base URL' },
+  engBaseUrlPhClaude: { en: 'e.g. https://example.com/anthropic', zh: '例如 https://example.com/anthropic' },
+  engBaseUrlPhCodex: { en: 'e.g. https://example.com/v1', zh: '例如 https://example.com/v1' },
+  engModelsUrlLabel: { en: 'Model list URL (optional)', zh: '模型列表 URL（可选）' },
+  engModelsUrlPh: { en: 'Defaults to Base URL + /models', zh: '默认 Base URL + /models' },
+  engModelPh: { en: 'Type a model id, e.g. gpt-4o', zh: '直接填写模型 id，例如 gpt-4o' },
+  engModelHintCustom: {
+    en: 'Type the model id yourself. Fetched candidates show up as suggestions while typing.',
+    zh: '模型 id 可以直接手填；拉取到的候选会在输入时作为提示出现。',
+  },
+  engEffortNoteClaude: {
+    en: 'Higher effort means longer thinking and higher cost. “Auto” = let the engine decide.',
+    zh: '强度越高思考越久、消耗越多；「自动」= 交给引擎决定。',
+  },
+  engEffortNoteCodex: {
+    en: 'Codex only has low/medium/high — picking “Very high/Max” runs as “High”.',
+    zh: 'Codex 只有低/中/高三档，选「极高/最高」会按「高」执行。',
+  },
+  engRefetchModels: { en: 'Re-fetch models', zh: '重新拉取模型' },
+  engDetectCurrent: { en: 'Detect current model', zh: '检测当前模型' },
+  engDetectAvailable: { en: 'Detect available models', zh: '检测可用模型' },
+  engVerifyTitle: { en: 'Verify each candidate for real', zh: '逐个真实验证可用性' },
+  engVerifyDesc: {
+    en: 'Sends one tiny request per candidate — slower, but accurate',
+    zh: '每个候选发一次极小请求，较慢但更准确',
+  },
+  engSaveClaude: { en: 'Save Claude Code settings', zh: '保存 Claude Code 设置' },
+  engSaveCodex: { en: 'Save Codex settings', zh: '保存 Codex 设置' },
+  // 思考强度档位（后端只下发 id，文案在这里）
+  effAuto: { en: 'Auto (let the engine decide)', zh: '自动（交给引擎决定）' },
+  effAutoShort: { en: 'auto', zh: '自动' },
+  effLow: { en: 'Low (fastest, cheapest)', zh: '低（最快、最省）' },
+  effMedium: { en: 'Medium (balanced)', zh: '中（均衡）' },
+  effHigh: { en: 'High (more careful)', zh: '高（更仔细）' },
+  effXhigh: { en: 'Very high (complex tasks)', zh: '极高（复杂任务）' },
+  effMax: { en: 'Max (strongest reasoning, slowest)', zh: '最高（最强推理，最慢）' },
+  // 模型候选：内置别名的展示名 + 两种后缀
+  mdlAliasOpus: { en: 'opus (alias → latest Opus)', zh: 'opus（别名→最新 Opus）' },
+  mdlAliasSonnet: { en: 'sonnet (alias → latest Sonnet)', zh: 'sonnet（别名→最新 Sonnet）' },
+  mdlAliasHaiku: { en: 'haiku (alias → latest Haiku)', zh: 'haiku（别名→最新 Haiku）' },
+  mdlAliasFable: { en: 'fable (alias → latest Fable)', zh: 'fable（别名→最新 Fable）' },
+  mdlSuffixDetected: { en: ' (currently active)', zh: '（当前实际）' },
+  mdlSuffixSelected: { en: ' (selected)', zh: '（已选定）' },
+  // 「检测当前模型」的来源说明（后端下发稳定编码，文案在这里）
+  srcClaudeInit: { en: 'claude stream-json init frame', zh: 'claude stream-json init 帧' },
+  srcCodexToml: { en: 'codex config.toml (model=)', zh: 'codex config.toml（model=）' },
+  srcCodexCatalog: {
+    en: 'default entry of the codex model catalog (config.toml has no model=)',
+    zh: 'codex 模型目录默认项（config.toml 未指定 model）',
+  },
+  srcCodex: { en: 'codex', zh: 'codex' },
+  // 后端探测失败的固定原因（其余为引擎/网络原样返回的报错，原样展示）
+  errInitNoModel: { en: 'the init frame carried no model field', zh: '未从 init 帧读到 model 字段' },
+  errCodexCatalogEmpty: { en: 'the model catalog is empty', zh: '模型目录为空' },
+  errProbeTimeout: { en: 'the probe timed out', zh: '探测超时' },
+  mdlUnknownReason: { en: 'unknown reason', zh: '未知原因' },
+  // 模型区的运行时提示
+  mdlStateFail: { en: 'Could not read the model state: {err}', zh: '无法读取模型状态：{err}' },
+  mdlLastDetect: { en: 'Last check: currently active model {model} (source: {src})', zh: '上次检测：当前实际模型 {model}（来源：{src}）' },
+  mdlLastDetectFail: { en: 'Last check failed: {err}', zh: '上次检测失败：{err}' },
+  mdlDetecting: {
+    en: 'Detecting the current model (starting the engine to read the real model, hold on)…',
+    zh: '正在检测当前模型（启动引擎读取实际模型，请稍候）…',
+  },
+  mdlDetected: { en: 'Currently active model: {model} (source: {src})', zh: '当前实际模型：{model}（来源：{src}）' },
+  mdlDetectFail: { en: 'Check failed: {err}', zh: '检测失败：{err}' },
+  mdlVerifying: {
+    en: 'Verifying each candidate for real — this can take a minute or two…',
+    zh: '正在逐个真实验证候选模型，可能需要一两分钟…',
+  },
+  mdlListing: { en: 'Fetching the list of available models…', zh: '正在获取可用模型列表…' },
+  mdlGotN: { en: 'Got {n} available models.', zh: '已获取 {n} 个可用模型。' },
+  mdlGotNVerified: {
+    en: 'Got {n} available models (✓ = verified working, ✕ = verification failed).',
+    zh: '已获取 {n} 个可用模型（✓=实测可用，✕=实测失败）。',
+  },
+  mdlGetFail: { en: 'Fetch failed: {err}', zh: '获取失败：{err}' },
+  mdlSelected: { en: '{model} selected — applies to the next task.', zh: '已选定 {model}，下一个任务生效。' },
+  mdlSelectedAuto: { en: 'Set to auto — applies to the next task.', zh: '已设为自动，下一个任务生效。' },
+  mdlAutoPickedOne: { en: 'Auto-selected {model}', zh: '已自动选择 {model}' },
+  mdlListFail: { en: 'Could not get the model list: {err}', zh: '获取模型列表失败：{err}' },
+  effortSet: { en: 'Thinking effort set to “{label}” — applies to the next task.', zh: '思考强度已设为「{label}」，下一个任务生效。' },
+  effortSetAuto: { en: 'Thinking effort set to auto — applies to the next task.', zh: '思考强度已设为自动，下一个任务生效。' },
+  engSaveFail: { en: 'Save failed: {err}', zh: '保存失败：{err}' },
+  engSavedOfficialClaude: { en: 'Saved: official subscription login flow.', zh: '已保存：原版订阅登录流程。' },
+  engSavedOfficialCodex: { en: 'Saved: official ChatGPT login flow.', zh: '已保存：原版 ChatGPT 登录流程。' },
+  engSavedProvider: { en: 'Saved: {provider}', zh: '已保存：{provider}' },
+  engSavedProviderModel: { en: 'Saved: {provider} (model {model})', zh: '已保存：{provider}（模型 {model}）' },
+  engLoadFail: { en: 'Could not read the {engine} provider config: {err}', zh: '读取 {engine} 服务商配置失败：{err}' },
+  engSavedOk: {
+    en: 'Saved. New sessions/tasks will use this provider and model.',
+    zh: '已保存。新会话/新任务即使用该服务商与模型。',
   },
   runningTag: { en: 'running', zh: '执行中' },
   justFinishedTag: { en: 'just ran', zh: '刚执行完' },
