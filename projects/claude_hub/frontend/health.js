@@ -8,6 +8,11 @@ const Health = {
   login: null,      // 正在进行的登录流程快照
   loginBox: null,   // 登录卡片挂在哪个元素上（WS 事件来了要重绘）
   loginOpts: {},
+  // 授权页给出的东西有两种：'code'=直接给授权码；'link'=只让填邮箱、验证链接发到邮箱里。
+  // 由用户自己选（选错随时能切回来），两边的输入框内容各自暂存，重绘不丢。
+  loginWay: 'code',
+  loginCode: '',
+  loginLink: '',
   busy: false,
 };
 
@@ -129,8 +134,17 @@ async function renderClaudeLogin(el, opts) {
 function paintClaudeLogin() {
   const el = Health.loginBox;
   if (!el) return;
+  stashLoginInputs();
   el.innerHTML = claudeLoginHtml(Health.auth || {}, Health.login);
   bindClaudeLogin(el);
+}
+
+// 重绘会把输入框连同内容一起换掉：先把用户已经粘进去的东西存起来，渲染时再填回去
+function stashLoginInputs() {
+  const code = $('clCodeInput');
+  const link = $('clLinkInput');
+  if (code) Health.loginCode = code.value;
+  if (link) Health.loginLink = link.value;
 }
 
 function claudeLoginHtml(a, s) {
@@ -181,7 +195,7 @@ function claudeLoginIdleHtml(s) {
   );
 }
 
-// 拿到链接之后的核心界面：一个大按钮 + 四步文字指引 + 授权码输入框
+// 拿到链接之后的核心界面：打开授权页 → 让用户自己认领「看到的是哪种情况」→ 分支指引
 function claudeLoginRunningHtml(s) {
   if (!s.url)
     return `<div class="cl-hint">${escapeHtml(s.message || T('clStarting'))}</div>` +
@@ -190,22 +204,63 @@ function claudeLoginRunningHtml(s) {
   if (done)
     return `<div class="cl-hint">${escapeHtml(s.message || '')}</div>` +
       `<div class="cl-acts"><button type="button" class="hc-btn" data-cl-recheck="1">${T('clRecheck')}</button></div>`;
-  const busyCode = s.phase === 'submitting';
+  const way = Health.loginWay === 'link' ? 'link' : 'code';
   return (
-    `<ol class="cl-steps">` +
-    `<li>${T('clStep1')}</li><li>${T('clStep2')}</li><li>${T('clStep3')}</li><li>${T('clStep4')}</li>` +
-    `</ol>` +
+    `<div class="cl-hint">${T('clRunHint')}</div>` +
     `<div class="cl-acts">` +
     `<a class="hc-btn hc-btn-primary cl-open" href="${escapeHtml(s.url)}" target="_blank" rel="noreferrer">${T('clOpenUrl')}</a>` +
     `<button type="button" class="hc-btn" data-cl-copy="1">${T('clCopyUrl')}</button>` +
     `</div>` +
     `<div class="cl-url" title="${escapeHtml(s.url)}">${escapeHtml(s.url)}</div>` +
-    `<div class="cl-code">` +
-    `<input type="text" id="clCodeInput" placeholder="${T('clCodePlaceholder')}" autocomplete="off"${busyCode ? ' disabled' : ''} />` +
-    `<button type="button" class="hc-btn hc-btn-primary" data-cl-submit="1"${busyCode ? ' disabled' : ''}>${busyCode ? T('clSubmitting') : T('clSubmit')}</button>` +
+    `<div class="cl-q">${T('clWhichCase')}</div>` +
+    `<div class="cl-ways">` +
+    clWayBtnHtml('code', way, T('clWayCode'), T('clWayCodeSub')) +
+    clWayBtnHtml('link', way, T('clWayLink'), T('clWayLinkSub')) +
     `</div>` +
+    (way === 'link' ? clLinkWayHtml() : clCodeWayHtml(s)) +
     `<div class="cl-msg" id="clMsg">${escapeHtml(s.message || '')}</div>` +
     `<div class="cl-acts"><button type="button" class="hc-btn" data-cl-cancel="1">${T('clCancel')}</button></div>`
+  );
+}
+
+function clWayBtnHtml(id, cur, title, sub) {
+  return `<button type="button" class="cl-way${id === cur ? ' on' : ''}" data-cl-way="${id}">` +
+    `<b>${title}</b><span>${sub}</span></button>`;
+}
+
+// 情况 A：授权页直接给了授权码 —— 老流程，粘回来即可
+function clCodeWayHtml(s) {
+  const busy = s.phase === 'submitting';
+  return (
+    `<ol class="cl-steps"><li>${T('clAStep1')}</li><li>${T('clAStep2')}</li><li>${T('clAStep3')}</li></ol>` +
+    `<div class="cl-code">` +
+    `<input type="text" id="clCodeInput" placeholder="${T('clCodePlaceholder')}" autocomplete="off"` +
+    ` value="${escapeHtml(Health.loginCode || '')}"${busy ? ' disabled' : ''} />` +
+    `<button type="button" class="hc-btn hc-btn-primary" data-cl-submit="1"${busy ? ' disabled' : ''}>` +
+    `${busy ? T('clSubmitting') : T('clSubmit')}</button>` +
+    `</div>`
+  );
+}
+
+// 情况 B：页面只让填邮箱，验证链接发到了邮箱 —— 页面上根本没有授权码，
+// 关键在于「同一个浏览器」+「验证完再打开一次授权页」，这两点说不清用户就会卡死。
+function clLinkWayHtml() {
+  return (
+    `<div class="cl-key">${T('clBKey')}</div>` +
+    `<ol class="cl-steps">` +
+    `<li>${T('clBStep1')}</li><li>${T('clBStep2')}</li><li>${T('clBStep3')}</li>` +
+    `<li>${T('clBStep4')}</li><li>${T('clBStep5')}</li>` +
+    `</ol>` +
+    `<div class="cl-code">` +
+    `<input type="text" id="clLinkInput" placeholder="${T('clLinkPlaceholder')}" autocomplete="off"` +
+    ` value="${escapeHtml(Health.loginLink || '')}" />` +
+    `<button type="button" class="hc-btn" data-cl-openlink="1">${T('clOpenLink')}</button>` +
+    `</div>` +
+    `<div class="cl-acts">` +
+    `<button type="button" class="hc-btn hc-btn-primary" data-cl-reopen="1">${T('clReopenAuth')}</button>` +
+    `<button type="button" class="hc-btn" data-cl-way="code">${T('clGotCode')}</button>` +
+    `</div>` +
+    `<div class="cl-note">${T('clBNote')}</div>`
   );
 }
 
@@ -215,6 +270,9 @@ function bindClaudeLogin(el) {
   on('[data-cl-recheck]', () => renderClaudeLogin(el, Health.loginOpts));
   on('[data-cl-cancel]', cancelClaudeLogin);
   on('[data-cl-submit]', submitClaudeCode);
+  on('[data-cl-way]', (ev) => pickClaudeLoginWay(ev.currentTarget.dataset.clWay));
+  on('[data-cl-openlink]', openClaudeVerifyLink);
+  on('[data-cl-reopen]', reopenClaudeAuthPage);
   on('[data-cl-copy]', () => {
     const url = (Health.login || {}).url || '';
     if (!url) return;
@@ -225,11 +283,44 @@ function bindClaudeLogin(el) {
   });
   const input = el.querySelector('#clCodeInput');
   if (input) input.onkeydown = (ev) => { if (ev.key === 'Enter') submitClaudeCode(); };
+  const link = el.querySelector('#clLinkInput');
+  if (link) link.onkeydown = (ev) => { if (ev.key === 'Enter') openClaudeVerifyLink(); };
+}
+
+// 切换「我看到的是哪种情况」。只影响本地呈现，不碰后端那个还在等 stdin 的登录进程。
+function pickClaudeLoginWay(way) {
+  Health.loginWay = way === 'link' ? 'link' : 'code';
+  paintClaudeLogin();
+}
+
+// 在同一个浏览器里打开邮箱验证链接 —— 这正是情况 B 最容易做错的一步，
+// 所以给个按钮代劳（用户手动复制到别的浏览器/手机上打开就白验证了）。
+function openClaudeVerifyLink() {
+  const input = $('clLinkInput');
+  const msg = $('clMsg');
+  const url = ((input && input.value) || '').trim();
+  Health.loginLink = url;
+  if (!/^https?:\/\//i.test(url)) { if (msg) msg.textContent = T('clNeedLink'); return; }
+  window.open(url, '_blank', 'noopener');
+  if (msg) msg.textContent = T('clLinkOpened');
+}
+
+// 验证完之后再打开一次同一条授权链接：登录进程还活着，链接依然有效，
+// 这次浏览器里已经是登录态，页面才会给出 Authorize → 授权码。
+function reopenClaudeAuthPage() {
+  const url = (Health.login || {}).url || '';
+  const msg = $('clMsg');
+  if (!url) return;
+  window.open(url, '_blank', 'noopener');
+  if (msg) msg.textContent = T('clReopened');
 }
 
 async function startClaudeLogin() {
   if (Health.busy) return;
   Health.busy = true;
+  Health.loginWay = 'code';
+  Health.loginCode = '';
+  Health.loginLink = '';
   Health.login = { phase: 'starting', url: '', message: T('clStarting'), log: [], error: '' };
   paintClaudeLogin();
   try {
@@ -246,7 +337,20 @@ async function submitClaudeCode() {
   const input = $('clCodeInput');
   const msg = $('clMsg');
   const code = ((input && input.value) || '').trim();
+  Health.loginCode = code;
   if (!code) { if (msg) msg.textContent = T('clNeedCode'); return; }
+  // 粘进来的是链接 → 十有八九是情况 B 的人把邮箱验证链接放错地方了。
+  // 提交上去只会让 claude 报错退出、整个流程重来，所以就地拦下并把他领到情况 B。
+  if (/^https?:\/\//i.test(code)) {
+    if (input) input.value = '';   // 先清掉，否则重绘时又被 stash 回 loginCode
+    Health.loginCode = '';
+    Health.loginLink = code;
+    Health.loginWay = 'link';
+    paintClaudeLogin();
+    const m2 = $('clMsg');
+    if (m2) m2.textContent = T('clCodeIsLink');
+    return;
+  }
   if (Health.busy) return;
   Health.busy = true;
   Health.login = { ...(Health.login || {}), phase: 'submitting', message: T('clSubmitting') };
@@ -263,6 +367,8 @@ async function submitClaudeCode() {
   } catch { /* 保留上一次状态 */ }
   if (Health.auth && Health.auth.loggedIn) {
     Health.login = null;
+    Health.loginCode = '';
+    Health.loginLink = '';
     paintClaudeLogin();
     if (Health.loginOpts.onLoggedIn) Health.loginOpts.onLoggedIn(Health.auth);
     return;
@@ -275,6 +381,8 @@ async function cancelClaudeLogin() {
     await api('/api/claude/auth/cancel', {});
   } catch { /* 进程可能已经结束 */ }
   Health.login = null;
+  Health.loginCode = '';
+  Health.loginLink = '';
   renderClaudeLogin(Health.loginBox, Health.loginOpts);
 }
 
@@ -289,8 +397,8 @@ function onClaudeLoginEvent(e) {
     error: e.error || '',
     log: prev.log || [],
   };
-  // 正在输入授权码时不要把输入框重绘掉（会丢掉用户已粘贴的内容）
-  const input = $('clCodeInput');
-  if (input && document.activeElement === input && e.phase === 'awaitCode') return;
+  // 正在往输入框里粘东西时不要重绘（会打断输入、丢掉光标位置）
+  const typing = document.activeElement;
+  if (typing && (typing.id === 'clCodeInput' || typing.id === 'clLinkInput') && e.phase === 'awaitCode') return;
   paintClaudeLogin();
 }

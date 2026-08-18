@@ -8,12 +8,22 @@
 // 于是整套流程可以完全在网页里完成：
 //   ① 后端起进程 → ② 抠出授权链接 → ③ 前端做成一个大按钮 + 文字指引
 //   → ④ 用户点开链接、在 Claude 网站授权、复制授权码 → ⑤ 粘回网页 → ⑥ 后端写进 stdin → 完成
+// ⚠ 第 ④ 步实际上有**两种情况**，只按「一定拿得到授权码」写会把人卡死：
+//   情况一（浏览器里已登录 claude.ai）：授权页直接给出授权码 `xxxxx#yyyyy` → 正常粘回来。
+//   情况二（浏览器里没登录）：Claude 让你填邮箱，然后**往邮箱发一条验证链接**，页面上没有授权码。
+//     此时必须把邮件里的链接放回「刚才打开授权页的同一个浏览器」里打开完成验证；
+//     换个浏览器/手机打开，验证虽然会成功，但 OAuth 会话对不上，永远拿不到授权码。
+//     验证完成后页面通常只说「登录成功」，仍然没有码 —— 这是正常的：
+//     再打开一次同一条授权链接（登录进程还活着，链接依然有效），这次才会出现 Authorize → 授权码。
+//   两种情况怎么选、怎么引导由前端呈现；后端这里只保证「把链接错当授权码提交」会被明确挡下来。
+//
 // `claude auth status --json` 直接给结构化登录态，不必去猜凭据文件在哪（三个平台各不相同）。
 //
 // 走第三方服务商（MiniMax / Kimi / 小米…）时用的是 ANTHROPIC_AUTH_TOKEN，**根本不需要登录**，
 // 所以状态里要能区分「没登录」和「不需要登录」，否则会把已经配好国产模型的用户吓一跳。
 //
 // 具体 IO（spawn claude、读 stdout、写 stdin）由 Realize 实现。
+import { AuthUrl } from '../helper/AuthUrl';
 
 export type LoginPhase =
   | 'idle'        // 没有进行中的登录
@@ -82,6 +92,13 @@ export class ClaudeLoginStruct {
   static async submitCode(code: string): Promise<LoginSession> {
     const value = (code || '').trim();
     if (!value) throw new Error('ClaudeLoginStruct.submitCode: 授权码不能为空');
+    // 情况二的用户很容易把邮箱验证链接粘到这里：写进 stdin 只会让 claude 报错退出，
+    // 还得从头再来一遍。直接挡下来，并告诉他链接该往哪儿放。
+    if (AuthUrl.isLink(value))
+      throw new Error(
+        `ClaudeLoginStruct.submitCode: 这是一个链接不是授权码（${value.slice(0, 60)}…）。` +
+          '邮箱里收到的验证链接要放回「刚才打开授权页的那个浏览器」里访问，完成验证后再回来重新打开授权链接取授权码。',
+      );
     const cur = this.session();
     if (cur.phase !== 'awaitCode' && cur.phase !== 'starting')
       throw new Error(`ClaudeLoginStruct.submitCode: 当前不在等待授权码（phase=${cur.phase}），请重新开始登录`);

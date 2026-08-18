@@ -2619,10 +2619,20 @@ body.light .session-item .meta .favorite-dir-badge { background: #dbeafe; color:
 .hc-row .hc-ms{color:var(--muted);flex:none}
 .hc-row.off .hc-ms{color:var(--red)}
 
-/* Claude 登录：四步指引 + 大按钮 + 授权码输入 */
+/* Claude 登录：大按钮 + 「授权码 / 邮箱验证链接」二选一 + 分步指引 */
 .cl-who{font-size:12.5px;color:var(--muted);margin-top:6px;word-break:break-all}
 .cl-steps{margin:8px 0 0;padding-left:22px;font-size:12.5px;line-height:1.85}
 .cl-steps li{margin:2px 0}
+.cl-q{font-size:12.5px;font-weight:600;margin-top:12px}
+.cl-ways{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.cl-way{flex:1;min-width:200px;text-align:left;cursor:pointer;padding:8px 10px;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg);color:var(--text)}
+.cl-way b{display:block;font-size:12.5px}
+.cl-way span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.5}
+.cl-way.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--bg))}
+.cl-key{margin-top:10px;padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.7;
+  border:1px solid color-mix(in srgb,var(--yellow) 55%,var(--border));
+  background:color-mix(in srgb,var(--yellow) 10%,var(--panel2))}
 .cl-open{text-decoration:none}
 .cl-url{margin-top:8px;font-size:11px;color:var(--muted);word-break:break-all;
   max-height:3.2em;overflow:hidden;font-family:ui-monospace,Consolas,monospace}

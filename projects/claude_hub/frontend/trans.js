@@ -489,16 +489,76 @@ const DICT = {
   clOpenUrl: { en: '① Open the authorization page ↗', zh: '① 打开授权页面 ↗' },
   clCopyUrl: { en: 'Copy link', zh: '复制链接' },
   clCopied: { en: 'Link copied — open it in any browser.', zh: '链接已复制，可在任意浏览器里打开。' },
-  clStep1: {
-    en: 'Click the blue button below — the Claude authorization page opens in a new tab.',
-    zh: '点下面的蓝色按钮，会在新标签页打开 Claude 授权页面。',
+  clRunHint: {
+    en: 'Open the authorization page with the blue button below, then pick A or B — whichever matches what that page actually shows you.',
+    zh: '先点下面的蓝色按钮打开授权页面，然后按你在页面上实际看到的情况，选下面的 A 或 B。',
   },
-  clStep2: {
-    en: 'Sign in with your Claude account, then click Authorize on that page.',
-    zh: '用你的 Claude 账号登录，然后在那个页面上点「Authorize」授权。',
+  clWhichCase: { en: '② Which one are you seeing on that page?', zh: '② 在授权页面上，你遇到的是哪一种？' },
+  clWayCode: { en: 'A · The page gave me a code', zh: 'A · 页面给了我一串授权码' },
+  clWayCodeSub: { en: 'Looks like xxxxxx#yyyyyy, copyable', zh: '形如 xxxxxx#yyyyyy，可以直接复制' },
+  clWayLink: { en: 'B · It only asked for my email', zh: 'B · 只让我填邮箱，验证链接发到了邮箱' },
+  clWayLinkSub: { en: 'A verification link was mailed to me, no code on the page', zh: '邮箱收到一条验证链接，页面上没有授权码' },
+
+  // 情况 A：页面直接给码
+  clAStep1: {
+    en: 'Sign in with your Claude account on that page, then click "Authorize".',
+    zh: '在授权页面上用你的 Claude 账号登录，然后点「Authorize」。',
   },
-  clStep3: { en: 'The page gives you an authorization code — copy it.', zh: '页面会给你一串授权码，复制它。' },
-  clStep4: { en: 'Paste it into the box below and click Finish.', zh: '粘贴到下面的输入框，点「完成登录」。' },
+  clAStep2: {
+    en: 'The page then shows an authorization code (like xxxxxx#yyyyyy) — copy it.',
+    zh: '页面会给出一串授权码（形如 xxxxxx#yyyyyy），复制它。',
+  },
+  clAStep3: { en: 'Paste it into the box below and click Finish.', zh: '粘贴到下面的输入框，点「完成登录」。' },
+
+  // 情况 B：页面只让填邮箱，验证链接发到邮箱，页面上没有授权码
+  clBKey: {
+    en: '⚠ Key point: the link in that email must be opened in the SAME browser you just opened the authorization page in. Opening it on your phone or in another browser will say "signed in", but no code will ever appear here and you will have to start over.',
+    zh: '⚠ 关键：邮件里的验证链接，必须放回「刚才打开授权页面的那个浏览器」里访问。用手机、或换一个浏览器打开，验证会显示成功，但这边永远拿不到授权码，只能从头再来。',
+  },
+  clBStep1: {
+    en: 'That email contains a verification link, not a code — it means this browser is not signed in to Claude yet, so Claude verifies it is really you first.',
+    zh: '邮件给的是「验证链接」而不是授权码 —— 说明这个浏览器还没登录 Claude 账号，Claude 要先确认是你本人。',
+  },
+  clBStep2: {
+    en: 'Copy the link from the email into the box below and click "Open in this browser" — that guarantees the same browser is used.',
+    zh: '把邮件里的链接复制到下面的输入框，点「在同一浏览器里打开」（这样开的就是同一个浏览器，最保险）。',
+  },
+  clBStep3: {
+    en: 'Click the verify button on the page that opens; seeing "signed in" is enough. There is no code on that page — that is normal. Do not close the browser.',
+    zh: '在打开的页面上点验证按钮，看到「登录成功 / Signed in」就够了。此时页面上没有授权码，这是正常的，别关浏览器。',
+  },
+  clBStep4: {
+    en: 'Come back here and click "Open the authorization page again". Now that the browser is signed in, the page shows "Authorize" — click it and you get the code.',
+    zh: '回到这里点「再打开一次授权页」。浏览器已经是登录态了，这次页面才会出现「Authorize」，点它就会给出授权码。',
+  },
+  clBStep5: {
+    en: 'With the code in hand, click "I have the code now", switch back to A, paste it and submit.',
+    zh: '拿到授权码后点「我拿到授权码了」，切回 A 的输入框粘贴、提交。',
+  },
+  clBNote: {
+    en: 'Do not click Cancel or reload this page meanwhile — the background sign-in process has to stay alive to receive the code.',
+    zh: '这期间别点「取消登录」，也别刷新本页：后台那个登录进程要一直开着才能接收授权码。',
+  },
+  clLinkPlaceholder: { en: 'Paste the verification link from the email here', zh: '把邮件里的验证链接粘贴到这里' },
+  clOpenLink: { en: 'Open in this browser', zh: '在同一浏览器里打开' },
+  clReopenAuth: { en: 'Open the authorization page again', zh: '再打开一次授权页' },
+  clGotCode: { en: 'I have the code now', zh: '我拿到授权码了' },
+  clNeedLink: {
+    en: 'Paste the verification link from the email first (it starts with http).',
+    zh: '请先粘贴邮件里的验证链接（以 http 开头）。',
+  },
+  clLinkOpened: {
+    en: 'Link opened in a new tab. When verification is done, come back and click "Open the authorization page again".',
+    zh: '已在新标签页打开验证链接。完成验证后回来点「再打开一次授权页」。',
+  },
+  clReopened: {
+    en: 'Authorization page reopened. If you are signed in now, click "Authorize" there to get the code.',
+    zh: '已重新打开授权页。如果已经是登录态，点页面上的「Authorize」就会给出授权码。',
+  },
+  clCodeIsLink: {
+    en: 'That is a link, not an authorization code — switched you to case B, follow the steps below.',
+    zh: '你粘的是一个链接，不是授权码 —— 已帮你切到情况 B，按下面的步骤来。',
+  },
   clCodePlaceholder: { en: 'Paste the authorization code here', zh: '把授权码粘贴到这里' },
   clSubmit: { en: 'Finish sign-in', zh: '完成登录' },
   clSubmitting: { en: 'Signing in…', zh: '登录中…' },
