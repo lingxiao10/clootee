@@ -64,8 +64,7 @@ const Assist = {
       this.renderAll();
       const p = document.getElementById('asConvs');
       if (p) p.hidden = true;
-      const ta = document.getElementById('asInput');
-      if (ta) ta.focus();
+      this.nudgeInput('asNewReady');
     }
   },
   switchConv(id) {
@@ -375,6 +374,29 @@ Output JSON only, no extra text: {"score": integer 0-100, "feedback": "under 60 
       document.getElementById('asCtxDrop').textContent = LT('asDropSel');
     }
   },
+  // 把学员的注意力引到输入框：气泡 + 输入框高亮 + 聚焦。
+  // 单纯 focus() 太隐蔽——「已经是新会话」时点＋不该再开一个空会话，
+  // 但也不能毫无反应，否则学员会以为按钮坏了。
+  nudgeInput(key) {
+    const ta = document.getElementById('asInput');
+    const tip = document.getElementById('asTip');
+    if (!ta || !tip) return;
+    clearTimeout(this._tipHide);
+    clearTimeout(this._tipGone);
+    tip.textContent = LT(key);
+    tip.hidden = false;
+    tip.classList.remove('out');
+    void tip.offsetWidth;          // 重启动画：连点两次也要每次都看得见
+    ta.classList.remove('nudge');
+    void ta.offsetWidth;
+    ta.classList.add('nudge');
+    if (!ta.disabled) ta.focus();
+    this._tipHide = setTimeout(() => {
+      tip.classList.add('out');
+      this._tipGone = setTimeout(() => { tip.hidden = true; tip.classList.remove('out'); }, 240);
+    }, 2800);
+  },
+
   setQuote(text) {
     this.quote = String(text || '').trim().slice(0, 2000);
     this.renderCtx();
@@ -423,7 +445,11 @@ Output JSON only, no extra text: {"score": integer 0-100, "feedback": "under 60 
       this.openSettings(false);
       if (typeof onAssistKeyChanged === 'function') onAssistKeyChanged();
     };
-    document.getElementById('asNewBtn').onclick = () => this.newConv();
+    document.getElementById('asNewBtn').onclick = () => {
+      // 当前会话还是空的：再开一个只会多出一个同名空会话，看起来像「点了没反应」
+      if (!this.cur().history.length) this.nudgeInput('asAlreadyNew');
+      else this.newConv();
+    };
     document.getElementById('asListBtn').onclick = () => {
       const p = document.getElementById('asConvs');
       if (p.hidden) { this.renderConvs(); p.hidden = false; } else p.hidden = true;

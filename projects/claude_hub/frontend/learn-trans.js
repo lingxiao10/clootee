@@ -164,6 +164,16 @@ const LDICT = {
     zh: '已达 {max} 轮上限。开一个新会话就能继续问。',
   },
   asWarnNewBtn: { en: 'New chat →', zh: '开新会话 →' },
+
+  // 点「＋」时给输入框的气泡提示：已经是空会话就不该再开一个，但必须有反馈
+  asAlreadyNew: {
+    en: 'This chat is already empty — type what you need right here ↓',
+    zh: '这已经是一个新会话啦，请在这里输入你的需求 ↓',
+  },
+  asNewReady: {
+    en: 'New chat ready — type what you need right here ↓',
+    zh: '新会话开好了，请在这里输入你的需求 ↓',
+  },
   asKeyLabel: { en: 'MiniMax API Key', zh: 'MiniMax API Key' },
   asKeyPh: { en: 'Paste your key — stored only in this browser', zh: '粘贴你的 Key —— 只存在这个浏览器里' },
   asModelLabel: { en: 'Model', zh: '模型' },

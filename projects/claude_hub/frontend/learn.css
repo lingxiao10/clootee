@@ -301,9 +301,33 @@
 }
 .as-ctx-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .as-ctx-drop { flex: none; padding: 2px 8px; font-size: 11px; background: none; border: 1px solid var(--border); }
-.as-input { display: flex; gap: 8px; align-items: flex-end; padding: 12px 14px; border-top: 1px solid var(--border); }
+.as-input { position: relative; display: flex; gap: 8px; align-items: flex-end; padding: 12px 14px; border-top: 1px solid var(--border); }
 .as-input textarea { resize: none; font-size: 13px; line-height: 1.6; }
 .as-input button { flex: none; padding: 9px 16px; }
+
+/* 点「＋」后的引导气泡：从输入框上方浮出，2.8 秒后淡出 */
+.as-tip {
+  position: absolute; left: 14px; right: 14px; bottom: calc(100% - 4px); z-index: 6;
+  padding: 8px 11px; border-radius: 9px;
+  background: var(--accent); color: #fff;
+  font-size: 11.5px; line-height: 1.6;
+  box-shadow: 0 8px 20px var(--overlay);
+  animation: asTipIn .26s cubic-bezier(.2, 1.5, .4, 1);
+}
+.as-tip::after {
+  content: ''; position: absolute; left: 24px; top: 100%;
+  border: 6px solid transparent; border-top-color: var(--accent);
+}
+.as-tip.out { animation: asTipOut .24s ease-in forwards; }
+@keyframes asTipIn  { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@keyframes asTipOut { to { opacity: 0; transform: translateY(6px) } }
+
+/* 输入框跟着闪一下，告诉学员「就是这里」 */
+.as-input textarea.nudge { animation: asNudge .9s ease-out; }
+@keyframes asNudge {
+  0%, 100% { border-color: var(--border); box-shadow: none }
+  12%, 62% { border-color: var(--accent); box-shadow: 0 0 0 3px var(--active) }
+}
 
 /* 选中文字后浮出的按钮 */
 .lp-sel-ask {
