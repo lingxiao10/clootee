@@ -274,7 +274,7 @@
       body: {
         zh: `<div class="lp-oneline">Claude Code 干活，Clootee 负责让你不用碰黑窗口。</div>
 <p>Claude Code 本来跑在<b>终端</b>里——黑底白字、只能打字的那种窗口。装它要先装 Node、敲命令、开终端登录，很多人卡在这。</p>
-<p>Clootee 把这些全包了：<b>解压 → 双击 start.bat → 跟着网页走</b>。缺什么当场装，有进度条。</p>
+<p>Clootee 把这些全包了：<b>解压 → 双击 Windows_Start.bat → 跟着网页走</b>。缺什么当场装，有进度条。</p>
 <details class="lp-fold"><summary>📋 它替你省掉了什么</summary><div class="lp-fold-body">
 <table>
 <tr><th>本来要自己做</th><th>在 Clootee 里</th></tr>
@@ -286,13 +286,13 @@
 </div></details>
 <details class="lp-fold"><summary>🚀 第一次怎么跑起来</summary><div class="lp-fold-body">
 <p><b>1.</b> 解压到英文路径，比如 <code>D:\\Clootee</code>（路径带中文或空格容易出怪问题）。</p>
-<p><b>2.</b> 双击 <code>start.bat</code>（Mac/Linux 是 <code>./start.sh</code>）。</p>
+<p><b>2.</b> 双击 <code>Windows_Start.bat</code>（Mac 双击 <code>Mac_Start.command</code>，Linux 跑 <code>./Linux_Start.sh</code>）。</p>
 <p><b>3.</b> 浏览器自动开 <code>localhost:8970</code>，第一次让你<b>自己设一个访问口令</b>——没有默认口令。</p>
-<p><b>停止</b>：双击 <code>stop.bat</code>。关浏览器不等于关掉它，它还在后台跑。</p>
+<p><b>停止</b>：双击 <code>Windows_Stop.bat</code>（Mac 是 <code>Mac_Stop.command</code>，Linux 跑 <code>./Linux_Stop.sh</code>）。关浏览器不等于关掉它，它还在后台跑。</p>
 </div></details>`,
         en: `<div class="lp-oneline">Claude Code does the work; Clootee spares you the black window.</div>
 <p>Claude Code normally runs in a <b>terminal</b> — the type-only black window. Installing it means Node, install commands, terminal login. Most people quit there.</p>
-<p>Clootee bundles all of it: <b>unzip → double-click start.bat → follow the page</b>. Missing pieces install themselves, with a progress bar.</p>
+<p>Clootee bundles all of it: <b>unzip → double-click Windows_Start.bat → follow the page</b>. Missing pieces install themselves, with a progress bar.</p>
 <details class="lp-fold"><summary>📋 What it removes for you</summary><div class="lp-fold-body">
 <table>
 <tr><th>Normally your job</th><th>In Clootee</th></tr>
@@ -304,9 +304,9 @@
 </div></details>
 <details class="lp-fold"><summary>🚀 Getting it running</summary><div class="lp-fold-body">
 <p><b>1.</b> Unzip to an ASCII path such as <code>D:\\Clootee</code> (spaces or non-ASCII cause odd failures).</p>
-<p><b>2.</b> Double-click <code>start.bat</code> (<code>./start.sh</code> on Mac/Linux).</p>
+<p><b>2.</b> Double-click <code>Windows_Start.bat</code> (<code>Mac_Start.command</code> on Mac, <code>./Linux_Start.sh</code> on Linux).</p>
 <p><b>3.</b> The browser opens <code>localhost:8970</code> and asks you to <b>set your own access password</b> — there is no default.</p>
-<p><b>To stop</b>: double-click <code>stop.bat</code>. Closing the browser does not stop it.</p>
+<p><b>To stop</b>: double-click <code>Windows_Stop.bat</code> (<code>Mac_Stop.command</code> on Mac, <code>./Linux_Stop.sh</code> on Linux). Closing the browser does not stop it.</p>
 </div></details>`,
       },
     },
@@ -591,7 +591,7 @@ I picked B on this question. Why is that wrong?</pre>
     { t: 'judge', fig: 'engine-shell',
       q: { zh: '关掉浏览器标签页，Clootee 就完全停止运行了。', en: 'Closing the browser tab fully stops Clootee.' },
       a: false,
-      e: { zh: '它是本机后台服务，要停必须运行 stop.bat / stop.sh。', en: 'It is a background service; you must run stop.bat / stop.sh to stop it.' } },
+      e: { zh: '它是本机后台服务，要停必须运行 Windows_Stop.bat / Mac_Stop.command / Linux_Stop.sh。', en: 'It is a background service; you must run Windows_Stop.bat / Mac_Stop.command / Linux_Stop.sh to stop it.' } },
 
     { t: 'single', fig: 'shield-lock',
       q: { zh: '首次打开 Clootee 时要求设定的「访问口令」，默认值是什么？', en: 'What is the default value of the access password Clootee asks you to set on first run?' },

@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  claude-hub 启动器（macOS / Linux）—— 与 start.bat 对应
+#  claude-hub 启动器 —— macOS / Linux 实现（与 start-windows.bat 对应）
+#  不要直接跑这个文件：请双击仓库根目录的 Mac_Start.command，
+#  或在 Linux 上执行 ./Linux_Start.sh。
 #    1) 解析 Node（out_end 内置便携版 → 系统 Node 18+ → 自动下载）
 #    2) 启动前自检：缺依赖就装、dist 过期就重编译（与 install.sh 同一套逻辑，
 #       见 backend/scripts/setup.js）
-#    3) 端口被占用时自动先跑 stop.sh 释放端口，再继续启动；释放不掉才报错
+#    3) 端口被占用时自动先跑 stop-unix.sh 释放端口，再继续启动；释放不掉才报错
 #    4) 运行**编译产物** dist —— TypeScript 只在构建时需要，运行期不需要
 # =============================================================================
 set -u
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+SELF="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SELF/.." && pwd)"
 HUB="$ROOT/projects/claude_hub"
 PORT=8970
 
@@ -36,7 +39,7 @@ if [ "$SETUP" -eq 1 ]; then
 fi
 
 # ============================================================
-#  端口占用检查：被占用就先跑一遍 stop.sh 释放端口，然后继续启动；
+#  端口占用检查：被占用就先跑一遍 stop-unix.sh 释放端口，然后继续启动；
 #  只有释放不掉时才停下报错。
 # ============================================================
 port_pid() {
@@ -50,20 +53,20 @@ WASBUSY=""
 if [ -n "$PORTPID" ]; then
   WASBUSY=1
   echo
-  echo "[warn] 端口 $PORT 已被占用（PID $PORTPID），先执行 stop.sh 释放 / port in use, running stop.sh first ..."
+  echo "[warn] 端口 $PORT 已被占用（PID $PORTPID），先执行停止脚本释放 / port in use, running the stop script first ..."
   echo
-  bash "$ROOT/stop.sh" || true
+  bash "$SELF/stop-unix.sh" || true
   echo
   PORTPID="$(port_pid)"
 fi
 if [ -n "$PORTPID" ]; then
   echo
-  echo "[ERROR] 执行 stop.sh 后端口 $PORT 仍被占用 / port $PORT is STILL in use."
+  echo "[ERROR] 执行停止脚本后端口 $PORT 仍被占用 / port $PORT is STILL in use."
   echo "        占用进程 PID = $PORTPID"
   echo "        进程名 / command = $(ps -p "$PORTPID" -o comm= 2>/dev/null || echo unknown)"
   echo
   echo "        有守护进程在拉起它，或结束进程需要更高权限："
-  echo "          1) 关掉其他还开着的 start.sh 终端"
+  echo "          1) 关掉其他还开着的 Mac_Start.command / Linux_Start.sh 终端"
   echo "          2) 检查 pm2： pm2 list   然后： pm2 delete claude-hub && pm2 save --force"
   echo "          3) 或手动结束： kill -9 $PORTPID"
   echo

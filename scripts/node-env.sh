@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  node-env.sh —— 解析出一个可用的 Node 运行时（供 start.sh / install.sh source）
+#  node-env.sh —— 解析出一个可用的 Node 运行时（供 scripts/start-unix.sh source）
 #    用法： ROOT=<仓库根>/ ; . "$ROOT/scripts/node-env.sh"  || exit 1
 #    成功后设置 NODE_EXE，并把内置运行时放到 PATH 最前面。
 #    顺序：1) out_end 内置便携版  2) 系统 Node（>= 18）  3) 自动下载便携版

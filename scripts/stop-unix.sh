@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# claude-hub 停止器（macOS / Linux）—— 与 stop.bat 对应
+# claude-hub 停止器 —— macOS / Linux 实现（与 stop-windows.bat 对应）
+# 不要直接跑这个文件：请双击仓库根目录的 Mac_Stop.command，
+# 或在 Linux 上执行 ./Linux_Stop.sh。
 set -u
 
 PORT=8970
@@ -71,7 +73,7 @@ if [ -n "$STILL" ]; then
   echo "[ERROR] 端口 $PORT 又被监听（PID $STILL），有守护进程在拉起它。"
   echo "        Port $PORT is listening again - something is respawning it."
   echo "        检查： pm2 list   然后： pm2 delete claude-hub && pm2 save --force"
-  echo "        也请关掉还开着的 start.sh 终端后再运行一次 stop.sh。"
+  echo "        也请关掉还开着的 Mac_Start.command / Linux_Start.sh 终端后再停一次。"
   exit 1
 fi
 echo "==> claude-hub 已停止，端口 $PORT 已释放 / stopped, port $PORT is free"

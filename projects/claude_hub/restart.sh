@@ -10,7 +10,7 @@ SKIP_CHECK="${1:-}"
 
 cd "$DIR/backend"
 
-# 依赖 + 编译产物一把梭（与 install.sh / start.sh 同一套逻辑）。
+# 依赖 + 编译产物一把梭（与根目录 Mac_Start.command / Linux_Start.sh 同一套逻辑）。
 # pm2 跑的是 dist，所以这一步失败就必须停下——否则会拿旧的 dist 起服务。
 if [ "$SKIP_CHECK" != "-s" ]; then
   echo "==> 自检并编译 / preflight + build ..."

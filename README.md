@@ -22,7 +22,7 @@ Every other tool starts with "first install Node, then `npm install -g …`, the
 sign in". **Clootee does all of that for you, from a web page.**
 
 ```
-① Unzip   →   ② Double-click start.bat   →   ③ Follow the wizard
+① Unzip   →   ② Double-click Windows_Start.bat   →   ③ Follow the wizard
 ```
 
 That's it. Whatever is missing, the wizard installs — with a progress bar, not a blank screen.
@@ -64,11 +64,12 @@ back. Works even when the server is remote — the link opens in *your* browser.
 
 | Platform | Start | Stop |
 |---|---|---|
-| Windows | double-click `start.bat` | double-click `stop.bat` |
-| macOS / Linux | `./start.sh` | `./stop.sh` |
+| Windows | double-click `Windows_Start.bat` | double-click `Windows_Stop.bat` |
+| macOS | double-click `Mac_Start.command` | double-click `Mac_Stop.command` |
+| Linux | `./Linux_Start.sh` | `./Linux_Stop.sh` |
 
 Opens <http://localhost:8970>. The start script self-checks everything and fixes what's missing.
-On macOS / Linux run `chmod +x start.sh stop.sh` once first.
+On macOS / Linux run `chmod +x Mac_*.command Linux_*.sh` once first.
 
 ---
 

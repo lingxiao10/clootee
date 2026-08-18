@@ -3,7 +3,7 @@
 /**
  * claude-hub 安装器 / 自检器（install & doctor）—— 跨平台唯一实现
  * ============================================================================
- * start.bat / start.sh / install.bat / install.sh 只负责「找到一个可用的 Node」，
+ * 各平台的启动脚本（scripts/start-windows.bat、scripts/start-unix.sh）只负责「找到一个可用的 Node」，
  * 之后所有安装与检查逻辑都在这里，Windows / macOS / Linux 共用同一份代码。
  *
  * 为什么是 .js 而不是 .ts：本脚本要在「TypeScript / ts-node 还没装」的时刻运行，

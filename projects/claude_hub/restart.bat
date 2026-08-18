@@ -11,7 +11,7 @@ set "SKIP_CHECK=%~1"
 
 cd /d "%DIR%backend" || goto :fail
 
-REM 依赖 + 编译产物一把梭（与 install.bat / start.bat 同一套逻辑）。
+REM 依赖 + 编译产物一把梭（与根目录 Windows_Start.bat 同一套逻辑）。
 REM pm2 跑的是 dist，所以这一步失败就必须停下——否则会拿旧的 dist 起服务。
 if /i "%SKIP_CHECK%"=="-s" goto :restart
 echo ==^> 自检并编译 / preflight + build ...

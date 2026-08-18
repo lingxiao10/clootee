@@ -22,7 +22,7 @@
 **Clootee 把这些全替你做了，而且是在网页里做的。**
 
 ```
-① 解压   →   ② 双击 start.bat   →   ③ 跟着网页引导走完
+① 解压   →   ② 双击 Windows_Start.bat   →   ③ 跟着网页引导走完
 ```
 
 就这三步。缺什么，引导页当场装给你看——有进度条，不是一片空白。
@@ -63,11 +63,12 @@ Clootee 把登录搬进了界面：点按钮 → 打开链接 → 在浏览器�
 
 | 平台 | 启动 | 停止 |
 |---|---|---|
-| Windows | 双击 `start.bat` | 双击 `stop.bat` |
-| macOS / Linux | `./start.sh` | `./stop.sh` |
+| Windows | 双击 `Windows_Start.bat` | 双击 `Windows_Stop.bat` |
+| macOS | 双击 `Mac_Start.command` | 双击 `Mac_Stop.command` |
+| Linux | `./Linux_Start.sh` | `./Linux_Stop.sh` |
 
 启动后自动打开 <http://localhost:8970>。start 脚本自己会做完整自检，缺什么补什么。
-macOS / Linux 首次先跑一次 `chmod +x start.sh stop.sh`。
+macOS / Linux 首次先跑一次 `chmod +x Mac_*.command Linux_*.sh`。
 
 ---
 

@@ -2,7 +2,7 @@
 REM ============================================================================
 REM  node-env.bat - resolve a usable Node.js runtime. Not meant to be run alone.
 REM
-REM  Callers (start.bat / install.bat) do:   call "%ROOT%scripts\node-env.bat"
+REM  Callers (scripts\start-windows.bat) do:   call "%ROOT%scripts\node-env.bat"
 REM  On success it sets NODE_EXE and prepends the bundled runtime to PATH.
 REM  Order: 1) bundled portable Node in out_end  2) system Node (>= 18)
 REM         3) auto-download a portable copy (nothing needs to be preinstalled)

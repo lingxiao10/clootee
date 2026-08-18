@@ -4,15 +4,16 @@ setlocal
 title claude-hub
 
 REM ============================================================================
-REM  claude-hub launcher (Windows)
+REM  claude-hub launcher - Windows implementation
+REM  Do not run this directly: double-click Windows_Start.bat in the repo root.
 REM    1) resolve Node (bundled portable -> system 18+ -> auto-download)
 REM    2) preflight: install/repair dependencies + rebuild backend\dist if stale
 REM       (same engine as install.bat - see backend\scripts\setup.js)
-REM    3) if port 8970 is taken, run stop.bat automatically to free it, then go on
+REM    3) if port 8970 is taken, run Windows_Stop.bat automatically to free it, then go on
 REM    4) run the COMPILED backend (dist) - TypeScript is only needed at build time
 REM ============================================================================
 
-set "ROOT=%~dp0"
+for %%i in ("%~dp0..") do set "ROOT=%%~fi\"
 set "HUB=%ROOT%projects\claude_hub"
 set "PORT=8970"
 
@@ -29,16 +30,16 @@ set "USE_TSNODE="
 if "%SETUP%"=="2" set "USE_TSNODE=1"
 
 REM ---------------------------------------------------------------------------
-REM  Port check: if the port is taken, run stop.bat to free it, then carry on.
+REM  Port check: if the port is taken, run Windows_Stop.bat to free it, then carry on.
 REM  Only give up (with the window kept open) if it is STILL taken afterwards.
 REM ---------------------------------------------------------------------------
 call :checkport
 if not defined PORTPID goto :portfree
 
 echo.
-echo [warn] Port %PORT% is already in use ^(PID %PORTPID%^) - running stop.bat to free it ...
+echo [warn] Port %PORT% is already in use ^(PID %PORTPID%^) - running Windows_Stop.bat to free it ...
 echo.
-call "%ROOT%stop.bat" --no-pause
+call "%~dp0stop-windows.bat" --no-pause
 echo.
 call :checkport
 if defined PORTPID goto :portbusy
@@ -77,12 +78,12 @@ exit /b %EXITCODE%
 
 :portbusy
 echo.
-echo [ERROR] Port %PORT% is STILL in use after running stop.bat.
+echo [ERROR] Port %PORT% is STILL in use after running Windows_Stop.bat.
 echo         Offending process PID = %PORTPID%
 for /f "tokens=1,2 delims=," %%a in ('tasklist /fi "PID eq %PORTPID%" /fo csv /nh 2^>nul') do echo         image = %%~a
 echo.
 echo         Something is respawning it, or the kill needs more rights:
-echo           1^) close any other open start.bat window
+echo           1^) close any other open Windows_Start.bat window
 echo           2^) check pm2:  pm2 list   ^(then: pm2 delete claude-hub ^&^& pm2 save --force^)
 echo           3^) or kill it manually from an admin prompt: taskkill /F /PID %PORTPID%
 echo.

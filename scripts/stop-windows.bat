@@ -2,10 +2,15 @@
 setlocal enabledelayedexpansion
 title claude-hub - stop
 
+REM ============================================================================
+REM  claude-hub stopper - Windows implementation
+REM  Do not run this directly: double-click Windows_Stop.bat in the repo root.
+REM ============================================================================
+
 set PORT=8970
 set "APP=claude-hub"
 
-REM  --no-pause : run non-interactively (used by start.bat when it frees the port itself)
+REM  --no-pause : run non-interactively (used by Windows_Start.bat when it frees the port itself)
 set "NOPAUSE="
 if /i "%~1"=="--no-pause" set "NOPAUSE=1"
 
@@ -58,7 +63,7 @@ if not defined FOUND (
 
 REM ============================================================
 REM  Step 3: verify. If something is listening again, a supervisor
-REM  (pm2 / a leftover start.bat window) is respawning it.
+REM  (pm2 / a leftover Windows_Start.bat window) is respawning it.
 REM ============================================================
 ping -n 3 127.0.0.1 >nul
 set "STILL="
@@ -68,7 +73,7 @@ for /f "tokens=5" %%p in ('netstat -ano -p TCP ^| findstr /R /C:"LISTENING" ^| f
 if defined STILL (
   echo [ERROR] Port %PORT% is listening again ^(PID %STILL%^) - something is respawning it.
   echo         Check:  pm2 list      ^(then: pm2 delete claude-hub ^&^& pm2 save --force^)
-  echo         Also close any open start.bat window, then run stop.bat again.
+  echo         Also close any open Windows_Start.bat window, then run Windows_Stop.bat again.
 ) else (
   echo ==^> claude-hub stopped, port %PORT% is free
 )
