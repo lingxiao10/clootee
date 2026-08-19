@@ -1822,7 +1822,7 @@ function animateMsgToggle(el, fromHeight) {
   if (!toHeight || Math.abs(toHeight - fromHeight) < 4) return;
   el.classList.add('ai-toggling');
   const anim = el.animate([{ height: fromHeight + 'px' }, { height: toHeight + 'px' }], {
-    duration: 180,
+    duration: 800,
     easing: 'cubic-bezier(.2,.7,.3,1)',
   });
   const done = () => el.classList.remove('ai-toggling');
@@ -1830,7 +1830,7 @@ function animateMsgToggle(el, fromHeight) {
   anim.addEventListener('cancel', done);
   const body = el.querySelector('.msg-body');
   if (body && typeof body.animate === 'function') {
-    body.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+    body.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 800, easing: 'ease-out' });
   }
 }
 
