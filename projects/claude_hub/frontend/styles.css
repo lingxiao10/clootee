@@ -1363,8 +1363,13 @@ body.light .badge.paused { background: #fbf0d0; }
   cursor: pointer;
 }
 .ai-collapsed-msg:hover { background: var(--hover); }
-/* 展开/收起过渡期间：高度由 JS 补间，这里负责把溢出内容裁掉，动画才干净 */
-.ai-toggling { overflow: hidden; }
+/* 展开/收起过渡期间：高度由 JS 补间，这里负责把溢出内容裁掉，动画才干净。
+   flex:none 不能少 —— .messages 是 column flex 且内容溢出（负剩余空间），
+   而 overflow:hidden 会让这条的 min-height:auto 退化成 0，于是全部负空间都压到它头上，
+   动画中的这条会被挤扁。position:relative 是给旧样子快照当定位基准。 */
+.ai-toggling { overflow: hidden; flex: none; position: relative; }
+/* 旧样子的快照：盖在原位淡出，与新内容交叠，避免「换了个元素」的第 0 帧硬切 */
+.ai-toggle-ghost { position: absolute; z-index: 1; max-width: none; margin: 0; pointer-events: none; }
 .ai-collapse-toggle-btn { transition: background .15s ease, color .15s ease; }
 .ai-collapsed-msg .msg-head { margin-bottom: 2px; }
 .ai-collapse-meta {

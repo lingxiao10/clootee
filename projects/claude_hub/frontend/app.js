@@ -1788,6 +1788,8 @@ function toggleAssistantGroup(key, expand) {
         key,
         top: el.getBoundingClientRect().top - box.getBoundingClientRect().top,
         height: el.offsetHeight,
+        width: el.offsetWidth,
+        ghost: msgToggleGhost(el),
       }
     : null;
   if (expand) State.aiExpandedGroups.add(key);
@@ -1811,27 +1813,85 @@ function applyMsgScroll(box) {
   }
   const delta = el.getBoundingClientRect().top - box.getBoundingClientRect().top - anchor.top;
   if (delta) box.scrollTop += delta;
-  animateMsgToggle(el, anchor.height);
+  animateMsgToggle(el, anchor);
 }
 
-// 简易动效：高度从旧值补间到新值 + 正文淡入，让展开/收起不是一帧闪现
-function animateMsgToggle(el, fromHeight) {
-  if (!fromHeight || typeof el.animate !== 'function') return;
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const toHeight = el.offsetHeight;
-  if (!toHeight || Math.abs(toHeight - fromHeight) < 4) return;
+const MSG_TOGGLE_MS = 800;
+// 从静止起步、到静止收住的缓动。之前那条 (.2,.7,.3,1) 起手斜率 3.5，一上来就窜出去，
+// 时长拉到 800ms 后这种「先弹一下再磨蹭」的感觉尤其别扭。
+const MSG_TOGGLE_EASE = 'cubic-bezier(.4, 0, .2, 1)';
+
+function motionOk() {
+  return !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+// 旧样子的快照。重渲染是把这一条整个换成另一个元素（折叠卡片 ⇄ 完整消息），
+// 不叠一张旧图淡出的话，第 0 帧就是「预览文字啪地变成正文」——外框补间得再慢也不像在展开。
+function msgToggleGhost(el) {
+  if (!motionOk() || typeof el.animate !== 'function') return null;
+  const ghost = el.cloneNode(true);
+  ghost.removeAttribute('id');
+  delete ghost.dataset.groupKey;
+  // 连点两下时，上一轮的快照可能还挂在里面，别把它也复制进来
+  ghost.querySelectorAll('.ai-toggle-ghost').forEach((n) => n.remove());
+  ghost.classList.remove('ai-toggling');
+  ghost.classList.add('ai-toggle-ghost');
+  return ghost;
+}
+
+// 自然展开：外框高度补间（内容被裁着一点点露出来）＋ 旧样子就地淡出 ＋ 新正文淡入落定
+function animateMsgToggle(el, anchor) {
+  const from = anchor.height;
+  const to = el.offsetHeight;
+  if (!motionOk() || typeof el.animate !== 'function' || !from || !to) return;
+  if (Math.abs(to - from) < 4) return;
   el.classList.add('ai-toggling');
-  const anim = el.animate([{ height: fromHeight + 'px' }, { height: toHeight + 'px' }], {
-    duration: 800,
-    easing: 'cubic-bezier(.2,.7,.3,1)',
+  const anim = el.animate([{ height: from + 'px' }, { height: to + 'px' }], {
+    duration: MSG_TOGGLE_MS,
+    easing: MSG_TOGGLE_EASE,
   });
   const done = () => el.classList.remove('ai-toggling');
   anim.addEventListener('finish', done);
   anim.addEventListener('cancel', done);
+  fadeOutMsgGhost(el, anchor);
+  fadeInMsgBody(el, to > from);
+}
+
+function fadeOutMsgGhost(el, anchor) {
+  const ghost = anchor.ghost;
+  if (!ghost) return;
+  const cs = getComputedStyle(el);
+  // 绝对定位以 padding 盒为基准，减掉边框宽度才能和新元素的边框盒对齐
+  ghost.style.top = '-' + cs.borderTopWidth;
+  ghost.style.left = '-' + cs.borderLeftWidth;
+  ghost.style.width = anchor.width + 'px';
+  el.appendChild(ghost);
+  const fade = ghost.animate([{ opacity: 1 }, { opacity: 0 }], {
+    duration: Math.round(MSG_TOGGLE_MS * 0.45),
+    easing: 'ease-out',
+    fill: 'forwards',
+  });
+  const drop = () => ghost.remove();
+  fade.addEventListener('finish', drop);
+  fade.addEventListener('cancel', drop);
+}
+
+function fadeInMsgBody(el, growing) {
   const body = el.querySelector('.msg-body');
-  if (body && typeof body.animate === 'function') {
-    body.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 800, easing: 'ease-out' });
-  }
+  if (!body || typeof body.animate !== 'function') return;
+  // fill:'backwards' —— 延迟这段时间里正文保持透明，让位给正在淡出的旧样子，两者才真的交叠
+  body.animate(
+    [
+      { opacity: 0, transform: 'translateY(' + (growing ? -6 : 6) + 'px)' },
+      { opacity: 1, transform: 'none' },
+    ],
+    {
+      duration: Math.round(MSG_TOGGLE_MS * 0.6),
+      delay: Math.round(MSG_TOGGLE_MS * 0.2),
+      easing: MSG_TOGGLE_EASE,
+      fill: 'backwards',
+    }
+  );
 }
 
 // 空白主区域的上手引导：三步 ① 添加项目目录 ② 新建会话 ③ 输入任务，
