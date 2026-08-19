@@ -1773,7 +1773,65 @@ function renderMessages() {
   syncTypingIndicator();
   renderElapsedNotes();
   refreshAiCollapseBtn();
-  box.scrollTop = box.scrollHeight;
+  applyMsgScroll(box);
+}
+
+// 展开/收起某个 AI 消息组：整块重渲染前先记下这条消息在可视区里的位置，
+// 渲染后把它钉回原处 —— 用户点开就是为了看这一条，不该被推到会话底部。
+let MsgRenderAnchor = null;
+
+function toggleAssistantGroup(key, expand) {
+  const box = $('messages');
+  const el = findGroupEl(box, key);
+  MsgRenderAnchor = el
+    ? {
+        key,
+        top: el.getBoundingClientRect().top - box.getBoundingClientRect().top,
+        height: el.offsetHeight,
+      }
+    : null;
+  if (expand) State.aiExpandedGroups.add(key);
+  else State.aiExpandedGroups.delete(key);
+  renderMessages();
+}
+
+function findGroupEl(box, key) {
+  if (!box || !key) return null;
+  return Array.from(box.children).find((n) => n.dataset && n.dataset.groupKey === key) || null;
+}
+
+// 有锚点就保持位置（展开/收起），否则维持一贯的「滚到底部」（新消息、切会话等）
+function applyMsgScroll(box) {
+  const anchor = MsgRenderAnchor;
+  MsgRenderAnchor = null;
+  const el = anchor ? findGroupEl(box, anchor.key) : null;
+  if (!el) {
+    box.scrollTop = box.scrollHeight;
+    return;
+  }
+  const delta = el.getBoundingClientRect().top - box.getBoundingClientRect().top - anchor.top;
+  if (delta) box.scrollTop += delta;
+  animateMsgToggle(el, anchor.height);
+}
+
+// 简易动效：高度从旧值补间到新值 + 正文淡入，让展开/收起不是一帧闪现
+function animateMsgToggle(el, fromHeight) {
+  if (!fromHeight || typeof el.animate !== 'function') return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const toHeight = el.offsetHeight;
+  if (!toHeight || Math.abs(toHeight - fromHeight) < 4) return;
+  el.classList.add('ai-toggling');
+  const anim = el.animate([{ height: fromHeight + 'px' }, { height: toHeight + 'px' }], {
+    duration: 180,
+    easing: 'cubic-bezier(.2,.7,.3,1)',
+  });
+  const done = () => el.classList.remove('ai-toggling');
+  anim.addEventListener('finish', done);
+  anim.addEventListener('cancel', done);
+  const body = el.querySelector('.msg-body');
+  if (body && typeof body.animate === 'function') {
+    body.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+  }
 }
 
 // 空白主区域的上手引导：三步 ① 添加项目目录 ② 新建会话 ③ 输入任务，
@@ -2035,10 +2093,7 @@ function addAssistantGroupEl(unit) {
   div.appendChild(foot);
 
   div.title = T('aiExpandGroup');
-  div.addEventListener('click', () => {
-    State.aiExpandedGroups.add(unit.key);
-    renderMessages();
-  });
+  div.addEventListener('click', () => toggleAssistantGroup(unit.key, true));
   box.appendChild(div);
 }
 
@@ -2064,8 +2119,7 @@ function addExpandedAssistantGroupEl(unit) {
   collapseBtn.title = T('aiCollapseGroup');
   collapseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    State.aiExpandedGroups.delete(unit.key);
-    renderMessages();
+    toggleAssistantGroup(unit.key, false);
   });
   foot.appendChild(collapseBtn);
   div.appendChild(foot);

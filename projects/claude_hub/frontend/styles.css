@@ -1363,6 +1363,9 @@ body.light .badge.paused { background: #fbf0d0; }
   cursor: pointer;
 }
 .ai-collapsed-msg:hover { background: var(--hover); }
+/* 展开/收起过渡期间：高度由 JS 补间，这里负责把溢出内容裁掉，动画才干净 */
+.ai-toggling { overflow: hidden; }
+.ai-collapse-toggle-btn { transition: background .15s ease, color .15s ease; }
 .ai-collapsed-msg .msg-head { margin-bottom: 2px; }
 .ai-collapse-meta {
   flex: none;
