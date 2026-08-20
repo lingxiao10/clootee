@@ -102,3 +102,6 @@ projects/claude_relay/
 # 二进制不入库，保持仓库轻量：node 启动时自动下载，git/引擎在界面里带进度一键安装。
 # 具体规则见 projects/claude_hub/out_end/.gitignore。
 # ─────────────────────────────────────────────────────────────
+# 例外四：assist/ 是对外发布的小助手组件，docs.md 是它的接入文档（产品的一部分，
+# 还要给 AI 读），必须入库。
+!projects/claude_hub/frontend/assist/*.md
