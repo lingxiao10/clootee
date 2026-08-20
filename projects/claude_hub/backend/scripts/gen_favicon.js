@@ -11,41 +11,50 @@ const zlib = require('zlib');
 
 const OUT_DIR = path.join(__dirname, '..', '..', 'frontend');
 
-// ——— 设计常量（对应 favicon.svg 的 64x64 坐标系）———
+// ——— 设计（对应 favicon.svg 的 64x64 坐标系）———
+// 折角方括号「C」：5 段折线，上臂短、下臂长（刻意不对称），配中间的竖条文本光标。
+// 刻意不用圆环 —— 圆环 + C 会被读成 ©，且撞车概率高。
 const S = 64;
-const RADIUS_BG = 14;          // 圆角方块
-const C = 32;                  // 圆心
-const R_RING = 16;             // C 环半径
-const W_RING = 10;             // C 环线宽
-const GAP_DEG = 40;            // 缺口半角（右侧）
-const CUR = 4.4;               // 中心光标方块半边长
-const CUR_R = 2.7;             // 光标圆角
-const C1 = [0x5b, 0x8c, 0xff]; // 渐变起点 #5b8cff
-const C2 = [0x8b, 0x5c, 0xf6]; // 渐变终点 #8b5cf6
-const SS = 4;                  // 每像素超采样边数
+const RADIUS_BG = 14;                  // 圆角方块
+const W_STROKE = 9.5;                  // 折线线宽
+const PTS = [[41.5, 16.5], [26, 16.5], [14.5, 32], [26, 47.5], [52, 47.5]];
+const CURSOR = { x: 31.4, y: 26, w: 7.6, h: 12, r: 3.4 };      // 竖条光标
+const C1 = [0x5b, 0x8c, 0xff];         // 渐变起点 #5b8cff
+const C2 = [0x8b, 0x5c, 0xf6];         // 渐变终点 #8b5cf6
+const SS = 4;                          // 每像素超采样边数
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-// 圆角矩形 SDF（<=0 在内部），box 半边长 h，圆角 r
-function sdRoundRect(x, y, h, r) {
-  const qx = Math.abs(x) - (h - r);
-  const qy = Math.abs(y) - (h - r);
-  const ax = Math.max(qx, 0), ay = Math.max(qy, 0);
-  return Math.hypot(ax, ay) + Math.min(Math.max(qx, qy), 0) - r;
+// 圆角矩形 SDF（<=0 在内部）：中心 (cx,cy)，半宽 hw，半高 hh，圆角 r
+function sdRoundBox(x, y, cx, cy, hw, hh, r) {
+  const qx = Math.abs(x - cx) - (hw - r);
+  const qy = Math.abs(y - cy) - (hh - r);
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
 
-// 带圆头的圆弧 SDF：缺口开在右侧（角度 ±GAP_DEG 之间为空）
-function sdArc(x, y) {
-  const dx = x - C, dy = y - C;
-  const ang = Math.abs(Math.atan2(dy, dx)) * 180 / Math.PI; // 0=右, 180=左
-  if (ang >= GAP_DEG) return Math.abs(Math.hypot(dx, dy) - R_RING) - W_RING / 2;
-  // 落在缺口扇区：量到两个圆头端点的距离
-  const a = GAP_DEG * Math.PI / 180;
-  const ex = C + R_RING * Math.cos(a);
-  const eyUp = C - R_RING * Math.sin(a);
-  const eyDn = C + R_RING * Math.sin(a);
-  const d = Math.min(Math.hypot(x - ex, y - eyUp), Math.hypot(x - ex, y - eyDn));
-  return d - W_RING / 2;
+// 点到线段的距离
+function sdSegment(x, y, ax, ay, bx, by) {
+  const px = x - ax, py = y - ay, dx = bx - ax, dy = by - ay;
+  const t = clamp01((px * dx + py * dy) / (dx * dx + dy * dy));
+  return Math.hypot(px - dx * t, py - dy * t);
+}
+
+// 折线（圆头圆角）SDF
+function sdPolyline(x, y) {
+  let d = Infinity;
+  for (let i = 0; i + 1 < PTS.length; i++) {
+    d = Math.min(d, sdSegment(x, y, PTS[i][0], PTS[i][1], PTS[i + 1][0], PTS[i + 1][1]));
+  }
+  return d - W_STROKE / 2;
+}
+
+// 前景 = 折线 ∪ 光标
+function sdMark(x, y) {
+  const c = CURSOR;
+  return Math.min(
+    sdPolyline(x, y),
+    sdRoundBox(x, y, c.x + c.w / 2, c.y + c.h / 2, c.w / 2, c.h / 2, c.r),
+  );
 }
 
 function renderRGBA(size) {
@@ -59,8 +68,8 @@ function renderRGBA(size) {
         for (let sx = 0; sx < SS; sx++) {
           const x = (px * SS + sx + 0.5) * step;
           const y = (py * SS + sy + 0.5) * step;
-          if (sdRoundRect(x - C, y - C, S / 2, RADIUS_BG) <= 0) covBg++;
-          const fg = Math.min(sdArc(x, y), sdRoundRect(x - C, y - C, CUR, CUR_R));
+          if (sdRoundBox(x, y, S / 2, S / 2, S / 2, S / 2, RADIUS_BG) <= 0) covBg++;
+          const fg = sdMark(x, y);
           if (fg <= 0) covFg++;
         }
       }
