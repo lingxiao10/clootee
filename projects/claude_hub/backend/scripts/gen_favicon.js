@@ -11,21 +11,40 @@ const zlib = require('zlib');
 
 const OUT_DIR = path.join(__dirname, '..', '..', 'frontend');
 
-// ——— 设计（对应 favicon.svg 的 64x64 坐标系）———
-// 折角方括号「C」：5 段折线，上臂短、下臂长（刻意不对称），配中间的竖条文本光标。
-// 刻意不用圆环 —— 圆环 + C 会被读成 ©，且撞车概率高。
+// ——— 设计（64x64 坐标系，与 favicon.svg 一致）———
+// 「CLT」三字母字标。三个字母要在 16px 下还能分辨，只能用**压缩字形 + 粗笔画**：
+// C 做成方肩压缩形（圆润的 C 太宽，三个字母就挤没了），笔画全部圆头圆角。
+// 每个字母用「中线折线 + 线宽」表达（和 SVG 里的 stroke 路径一一对应）。
 const S = 64;
 const RADIUS_BG = 14;                  // 圆角方块
-const W_STROKE = 9.5;                  // 折线线宽
-const PTS = [[41.5, 16.5], [26, 16.5], [14.5, 32], [26, 47.5], [52, 47.5]];
-const CURSOR = { x: 31.4, y: 26, w: 7.6, h: 12, r: 3.4 };      // 竖条光标
+const W_STROKE = 7;                    // 字母笔画宽
+const TOP = 20.5, BOT = 43.5;          // 中线上下沿（视觉字高 = 23 + 7 = 30）
+// C 的中线：竖干 + 上下两个真圆角（只靠笔画自带圆角会读成方括号「[」），采样成折线
+function arcPts(cx, cy, r, a0, a1, n) {
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const a = (a0 + (a1 - a0) * (i / n)) * Math.PI / 180;
+    out.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  return out;
+}
+const GLYPHS = [
+  // C：上臂 → 上圆角 → 竖干 → 下圆角 → 下臂
+  [[16.5, 21], ...arcPts(16, 27, 6, -90, -180, 8), ...arcPts(16, 37, 6, 180, 90, 8), [16.5, 43]],
+  [[25.5, TOP], [25.5, BOT], [32.5, BOT]],              // L
+  [[42, TOP], [53.5, TOP]],                             // T 横
+  [[47.75, TOP], [47.75, BOT]],                         // T 竖
+];
+
+// 注：曾试过小尺寸整体加粗（光学字号的土办法），16px 下反而把 C 的开口糊住、读成「a」，
+// 4x4 超采样本身已经够，所以不做补偿。
 const C1 = [0x5b, 0x8c, 0xff];         // 渐变起点 #5b8cff
 const C2 = [0x8b, 0x5c, 0xf6];         // 渐变终点 #8b5cf6
 const SS = 4;                          // 每像素超采样边数
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-// 圆角矩形 SDF（<=0 在内部）：中心 (cx,cy)，半宽 hw，半高 hh，圆角 r
+// 圆角矩形 SDF（<=0 在内部）
 function sdRoundBox(x, y, cx, cy, hw, hh, r) {
   const qx = Math.abs(x - cx) - (hw - r);
   const qy = Math.abs(y - cy) - (hh - r);
@@ -39,22 +58,15 @@ function sdSegment(x, y, ax, ay, bx, by) {
   return Math.hypot(px - dx * t, py - dy * t);
 }
 
-// 折线（圆头圆角）SDF
-function sdPolyline(x, y) {
+// 前景 = 所有字母折线的并集（圆头 = 距离场天然带圆角）
+function sdMark(x, y) {
   let d = Infinity;
-  for (let i = 0; i + 1 < PTS.length; i++) {
-    d = Math.min(d, sdSegment(x, y, PTS[i][0], PTS[i][1], PTS[i + 1][0], PTS[i + 1][1]));
+  for (const pts of GLYPHS) {
+    for (let i = 0; i + 1 < pts.length; i++) {
+      d = Math.min(d, sdSegment(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]));
+    }
   }
   return d - W_STROKE / 2;
-}
-
-// 前景 = 折线 ∪ 光标
-function sdMark(x, y) {
-  const c = CURSOR;
-  return Math.min(
-    sdPolyline(x, y),
-    sdRoundBox(x, y, c.x + c.w / 2, c.y + c.h / 2, c.w / 2, c.h / 2, c.r),
-  );
 }
 
 function renderRGBA(size) {
