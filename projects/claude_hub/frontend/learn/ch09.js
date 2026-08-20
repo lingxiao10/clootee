@@ -45,7 +45,7 @@
 
 【产出】在当前工作目录下新建文件夹 tutorial-xxx/，里面放两个文件：
 - index.html —— 教程正文，单页，双击就能在浏览器打开
-- assistant.js —— AI 小助手组件，从 https://assist.xfeixie.com/assistant.js 下载到这个文件夹
+- assistant.js —— AI 小助手组件，从 https://learn.xfeixie.com/assist/assistant.js 下载到这个文件夹
   （下载不了就从本机 Clootee 目录复制：projects/claude_hub/frontend/assist/assistant.js）
 
 【正文怎么写】
@@ -59,7 +59,7 @@
 在 &lt;/body&gt; 之前加这两行，不要自己另写聊天窗：
 &lt;script&gt;window.XFAssistant = { subject: 'XXX' };&lt;/script&gt;
 &lt;script src="./assistant.js"&gt;&lt;/script&gt;
-接入方式详见 https://assist.xfeixie.com/docs.md ，先读这个文档再动手。
+接入方式详见 https://learn.xfeixie.com/assist/docs.md ，先读这个文档再动手。
 
 【约束】
 - 除了 assistant.js，不依赖任何外网资源，断网也要能打开。
@@ -87,7 +87,7 @@
 
 [Output] Create a folder tutorial-xxx/ in the current workspace with two files:
 - index.html —— the tutorial itself, one page, opens by double-click
-- assistant.js —— the AI assistant component, downloaded from https://assist.xfeixie.com/assistant.js
+- assistant.js —— the AI assistant component, downloaded from https://learn.xfeixie.com/assist/assistant.js
   (if the download fails, copy it from this machine's Clootee:
    projects/claude_hub/frontend/assist/assistant.js)
 
@@ -102,7 +102,7 @@
 Add these two lines before &lt;/body&gt;. Do not write your own chat window:
 &lt;script&gt;window.XFAssistant = { subject: 'XXX' };&lt;/script&gt;
 &lt;script src="./assistant.js"&gt;&lt;/script&gt;
-Integration docs: https://assist.xfeixie.com/docs.md — read that first, then build.
+Integration docs: https://learn.xfeixie.com/assist/docs.md — read that first, then build.
 
 [Constraints]
 - Apart from assistant.js, no external resources; it must open offline.
@@ -244,7 +244,7 @@ Add a final section "common mistakes" with the 3 things beginners get wrong.</pr
       e: { zh: '这条提示词是模板，换主题即可复用——和第 4 章的周报模板同一个思路。', en: 'It is a template: swap the topic and reuse — the same idea as the weekly-update template in Chapter 4.' } },
 
     { t: 'single', fig: 'read-first',
-      q: { zh: '提示词里为什么要给出 <code>https://assist.xfeixie.com/docs.md</code> 这个地址？', en: 'Why does the prompt include the <code>docs.md</code> URL?' },
+      q: { zh: '提示词里为什么要给出 <code>https://learn.xfeixie.com/assist/docs.md</code> 这个地址？', en: 'Why does the prompt include the <code>docs.md</code> URL?' },
       o: [
         { zh: '为了让教程看起来更专业', en: 'To make the tutorial look professional' },
         { zh: '那是专门写给 AI 读的接入文档，先读它就不会瞎猜组件用法', en: 'It is integration documentation written for the AI; reading it stops the AI guessing how to use the component' },

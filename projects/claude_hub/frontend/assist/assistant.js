@@ -2,7 +2,7 @@
  * xfeixie-assistant —— 可嵌进任意网页的 AI 学习小助手（单文件、零依赖、无后端）
  *
  * 用法：在网页 </body> 之前加这一行就行
- *   <script src="https://assist.xfeixie.com/assistant.js"></script>
+ *   <script src="https://learn.xfeixie.com/assist/assistant.js"></script>
  *
  * 它会自己在页面右侧插一个侧栏，自带样式，不依赖任何框架。
  * 浏览器直连 MiniMax（官方接口已放行 CORS），API Key 由使用者自己填、只存在本地浏览器。
@@ -10,7 +10,7 @@
  * 可选配置（写在引入之前）：
  *   <script>window.XFAssistant = { title:'学习小助手', subject:'GEO', lang:'zh', accent:'#5b8cff' };</script>
  *
- * 给 AI 读的接入文档：https://assist.xfeixie.com/docs.md
+ * 给 AI 读的接入文档：https://learn.xfeixie.com/assist/docs.md
  */
 (function () {
   'use strict';

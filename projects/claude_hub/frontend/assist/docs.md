@@ -19,7 +19,7 @@
 在 `</body>` 之前加上：
 
 ```html
-<script src="https://assist.xfeixie.com/assistant.js"></script>
+<script src="https://learn.xfeixie.com/assist/assistant.js"></script>
 ```
 
 就这一行，不需要写任何 HTML 容器、不需要引 CSS、不需要初始化代码。
@@ -39,7 +39,7 @@
     baseUrl: 'https://api.minimaxi.com/v1'
   };
 </script>
-<script src="https://assist.xfeixie.com/assistant.js"></script>
+<script src="https://learn.xfeixie.com/assist/assistant.js"></script>
 ```
 
 全部字段都是可选的，不写就用默认值。
